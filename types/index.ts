@@ -81,23 +81,6 @@ export interface Course extends BaseModel {
   };
 }
 
-export interface Team extends BaseModel {
-  name: string;
-  members: string[]; // Relation to User IDs (students)
-  expand?: {
-    members?: User[];
-  };
-}
-
-export interface Message extends BaseModel {
-  text: string;
-  sender: string; // Relation to User ID (renamed from 'user' to avoid conflicts)
-  team: string; // Relation to Team ID
-  expand?: {
-    sender?: User;
-  };
-}
-
 export interface Review extends BaseModel {
   sprint: string; // Relation to Sprint ID
   teacher: string; // Relation to User ID (teacher)

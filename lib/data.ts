@@ -1,5 +1,5 @@
 import { createServerClient } from './pocketbase-server';
-import { Sprint, Class, Link, Assignment, User, Delivery, Team, Review } from '@/types';
+import { Sprint, Class, Link, Assignment, User, Delivery, Review } from '@/types';
 import { unstable_cache } from 'next/cache';
 import { cache } from 'react';
 import PocketBase from 'pocketbase';
@@ -57,18 +57,6 @@ const getStudentsCached = unstable_cache(
     { revalidate: 60, tags: ['users'] }
 );
 
-const getTeamsCached = unstable_cache(
-    async (token: string | undefined) => {
-        const pb = createClientWithToken(token);
-        return await pb.collection('teams').getFullList<Team>({
-            sort: 'created',
-            expand: 'members',
-        });
-    },
-    ['teams-list'],
-    { revalidate: 60, tags: ['teams'] }
-);
-
 // Exported functions with request memoization (React.cache)
 
 export const getReviews = cache(async (sprintId: string) => {
@@ -120,43 +108,6 @@ export const getStudents = cache(async () => {
     const cookieStore = await cookies();
     const token = cookieStore.get('pb_auth')?.value;
     return getStudentsCached(token);
-});
-
-export const getTeams = cache(async () => {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('pb_auth')?.value;
-    try {
-        return await getTeamsCached(token);
-    } catch (error) {
-        console.error('Error fetching teams:', error);
-        return [];
-    }
-});
-
-export const getTeam = cache(async (id: string) => {
-  const pb = await createServerClient();
-  try {
-    const record = await pb.collection('teams').getOne<Team>(id, {
-      expand: 'members',
-    });
-    return record;
-  } catch (error) {
-    console.error('Error fetching team:', error);
-    return null;
-  }
-});
-
-export const getStudentTeam = cache(async (studentId: string) => {
-  const pb = await createServerClient();
-  try {
-    const record = await pb.collection('teams').getFirstListItem<Team>(
-      `members ~ "${studentId}"`, 
-      { expand: 'members' }
-    );
-    return record;
-  } catch (error) {
-    return null;
-  }
 });
 
 export const getSprint = cache(async (id: string) => {
