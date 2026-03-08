@@ -2,7 +2,6 @@ import { getAllClasses } from "@/lib/data";
 import Link from "next/link";
 import FormattedDate from "@/components/FormattedDate";
 import { getCurrentUser } from "@/lib/pocketbase-server";
-import ClassForm from "@/components/ClassForm";
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +18,13 @@ export default async function ClassesPage() {
           <p className="text-zinc-500 dark:text-zinc-400 mt-2">Todas las clases del curso.</p>
         </div>
         {isTeacher && (
-           <ClassForm />
+           <Link 
+             href="/classes/new"
+             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+           >
+             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+             Nueva Clase
+           </Link>
         )}
       </div>
 
@@ -40,7 +45,7 @@ export default async function ClassesPage() {
                   </h2>
                   <div className="flex items-center gap-2 mt-2 text-sm text-zinc-500 dark:text-zinc-400">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                    {cls.date ? <FormattedDate date={cls.date} /> : <span>Fecha por definir</span>}
+                    {cls.date ? <FormattedDate date={cls.date} showTime={true} /> : <span>Fecha por definir</span>}
                   </div>
                 </div>
                 <div className="bg-zinc-100 dark:bg-zinc-800 p-2 rounded-lg group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 transition-colors">

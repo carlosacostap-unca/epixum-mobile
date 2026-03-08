@@ -109,7 +109,9 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
       {user && user.role === 'estudiante' && (
         <StudentDelivery 
             assignmentId={assignment.id} 
-            delivery={userDelivery} 
+            delivery={userDelivery}
+            studentName={user.name}
+            assignmentTitle={assignment.title}
         />
       )}
     </div>

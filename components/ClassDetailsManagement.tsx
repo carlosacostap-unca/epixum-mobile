@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Class, Link as LinkType, User, Inquiry } from "@/types";
 import Link from "next/link";
 import FormattedDate from "@/components/FormattedDate";
-import { deleteLink } from "@/lib/actions";
+import { deleteLink, getResourceDownloadUrl } from "@/lib/actions";
 import { useRouter } from "next/navigation";
 import ClassForm from "./ClassForm";
 import LinkForm from "./LinkForm";
@@ -19,7 +19,6 @@ interface ClassDetailsManagementProps {
 
 export default function ClassDetailsManagement({ user, classData, links, inquiries }: ClassDetailsManagementProps) {
   const [isEditingClass, setIsEditingClass] = useState(false);
-  const [isCreatingLink, setIsCreatingLink] = useState(false);
   const [editingLink, setEditingLink] = useState<LinkType | null>(null);
   
   const router = useRouter();
@@ -28,6 +27,29 @@ export default function ClassDetailsManagement({ user, classData, links, inquiri
     if (confirm("¿Estás seguro de que quieres eliminar este enlace?")) {
       await deleteLink(linkId, classData.id, 'class');
       router.refresh();
+    }
+  };
+
+  const isFileResource = (link: LinkType) => {
+    return link.type === 'file' || 
+           link.url.includes('idrivee2.com') || 
+           link.url.includes('epixum-javascript-storage');
+  };
+
+  const handleResourceClick = async (e: React.MouseEvent, link: LinkType) => {
+    if (isFileResource(link)) {
+        e.preventDefault();
+        try {
+            const result = await getResourceDownloadUrl(link.id);
+            if (result.success && result.url) {
+                window.open(result.url, '_blank');
+            } else {
+                alert("No se pudo descargar el archivo.");
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Error al descargar el archivo.");
+        }
     }
   };
 
@@ -64,13 +86,13 @@ export default function ClassDetailsManagement({ user, classData, links, inquiri
       <div className="space-y-6">
         <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold">Recursos de la clase</h2>
-            <button
-                onClick={() => setIsCreatingLink(true)}
+            <Link
+                href={`/classes/${classData.id}/resources/new`}
                 className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-1"
             >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                 Agregar Recurso
-            </button>
+            </Link>
         </div>
         
         {links.length === 0 ? (
@@ -103,18 +125,28 @@ export default function ClassDetailsManagement({ user, classData, links, inquiri
                      </button>
                  </div>
 
-                <a href={link.url} target="_blank" rel="noopener noreferrer" className="block h-full">
+                <a 
+                    href={isFileResource(link) ? '#' : link.url} 
+                    target={isFileResource(link) ? undefined : "_blank"}
+                    rel={isFileResource(link) ? undefined : "noopener noreferrer"}
+                    onClick={(e) => handleResourceClick(e, link)}
+                    className="block h-full"
+                >
                     <div className="flex items-center justify-between mb-2">
-                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200">
-                        LINK
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${isFileResource(link) ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-200' : 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200'}`}>
+                        {isFileResource(link) ? 'ARCHIVO' : 'LINK'}
                     </span>
-                    <svg className="w-5 h-5 text-zinc-400 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                    {isFileResource(link) ? (
+                        <svg className="w-5 h-5 text-zinc-400 group-hover:text-purple-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                    ) : (
+                        <svg className="w-5 h-5 text-zinc-400 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                    )}
                     </div>
-                    <h3 className="text-lg font-bold group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors pr-8">
+                    <h3 className={`text-lg font-bold transition-colors pr-8 ${isFileResource(link) ? 'group-hover:text-purple-600 dark:group-hover:text-purple-400' : 'group-hover:text-blue-600 dark:group-hover:text-blue-400'}`}>
                     {link.title}
                     </h3>
                     <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 truncate">
-                        {link.url}
+                        {isFileResource(link) ? link.url.split('/').pop() : link.url}
                     </p>
                 </a>
               </div>
@@ -132,12 +164,6 @@ export default function ClassDetailsManagement({ user, classData, links, inquiri
       {isEditingClass && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <ClassForm clase={classData} onClose={() => setIsEditingClass(false)} />
-        </div>
-      )}
-
-      {isCreatingLink && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <LinkForm classId={classData.id} onClose={() => setIsCreatingLink(false)} />
         </div>
       )}
 

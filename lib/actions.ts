@@ -2,6 +2,117 @@
 
 import { createServerClient } from "@/lib/pocketbase-server";
 import { revalidatePath } from "next/cache";
+import { getPresignedUploadUrl, getPresignedDownloadUrl, configureBucketCors } from "./s3";
+
+export async function ensureCorsConfigured() {
+  try {
+    const success = await configureBucketCors();
+    return { success };
+  } catch (error) {
+    console.error("Failed to configure CORS:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function getUploadUrl(filename: string, fileType: string) {
+  const pb = await createServerClient();
+  const user = pb.authStore.model;
+
+  if (!user || user.role !== 'estudiante') {
+    return { success: false, error: 'Unauthorized' };
+  }
+
+  try {
+    const { url, fields } = await getPresignedUploadUrl(filename, fileType);
+    return { success: true, url, fields };
+  } catch (error) {
+    console.error('Failed to get upload URL:', error);
+    return { success: false, error: 'Failed to get upload URL' };
+  }
+}
+
+export async function getResourceUploadUrl(filename: string, fileType: string) {
+  const pb = await createServerClient();
+  const user = pb.authStore.model;
+
+  if (!user || (user.role !== 'docente' && user.role !== 'admin')) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
+  try {
+    const { url, fields } = await getPresignedUploadUrl(filename, fileType);
+    return { success: true, url, fields };
+  } catch (error) {
+    console.error('Failed to get resource upload URL:', error);
+    return { success: false, error: 'Failed to get resource upload URL' };
+  }
+}
+
+export async function getResourceDownloadUrl(linkId: string) {
+  const pb = await createServerClient();
+  const user = pb.authStore.model;
+
+  if (!user) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
+  try {
+    const link = await pb.collection('links').getOne(linkId);
+
+    // Extract key from url
+    // Assuming url is like https://endpoint/bucket/filename.ext or just filename
+    let key = link.url;
+    if (link.url.startsWith('http')) {
+        const urlObj = new URL(link.url);
+        key = urlObj.pathname.split('/').pop() || '';
+    }
+
+    if (!key) {
+        return { success: false, error: 'Invalid file key' };
+    }
+
+    const downloadUrl = await getPresignedDownloadUrl(key);
+    return { success: true, url: downloadUrl };
+
+  } catch (error) {
+    console.error('Failed to get resource download URL:', error);
+    return { success: false, error: 'Failed to get resource download URL' };
+  }
+}
+
+export async function getDeliveryDownloadUrl(deliveryId: string) {
+  const pb = await createServerClient();
+  const user = pb.authStore.model;
+
+  if (!user) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
+  try {
+    const delivery = await pb.collection('deliveries').getOne(deliveryId);
+
+    // Check permissions: Student can access their own, Teacher/Admin can access all
+    if (user.role === 'estudiante' && delivery.student !== user.id) {
+        return { success: false, error: 'Unauthorized access to delivery' };
+    }
+
+    // Extract key from repositoryUrl
+    // Assuming repositoryUrl is like https://endpoint/bucket/filename.zip
+    const url = new URL(delivery.repositoryUrl);
+    const key = url.pathname.split('/').pop();
+
+    if (!key) {
+        return { success: false, error: 'Invalid file key' };
+    }
+
+    const downloadUrl = await getPresignedDownloadUrl(key);
+    return { success: true, url: downloadUrl };
+
+  } catch (error) {
+    console.error('Failed to get download URL:', error);
+    return { success: false, error: 'Failed to get download URL' };
+  }
+}
 
 export async function updateUserRole(userId: string, role: string) {
   const pb = await createServerClient();
@@ -197,6 +308,7 @@ export async function createLink(formData: FormData) {
 
   const title = formData.get('title') as string;
   const url = formData.get('url') as string;
+  const type = formData.get('type') as 'link' | 'file' || 'link';
   const classId = formData.get('classId') as string;
   const assignmentId = formData.get('assignmentId') as string;
 
@@ -208,6 +320,7 @@ export async function createLink(formData: FormData) {
     const data: any = {
       title,
       url,
+      type,
     };
     if (classId) data.class = classId;
     if (assignmentId) data.assignment = assignmentId;
@@ -234,14 +347,16 @@ export async function updateLink(linkId: string, formData: FormData) {
 
   const title = formData.get('title') as string;
   const url = formData.get('url') as string;
+  const type = formData.get('type') as 'link' | 'file';
   const classId = formData.get('classId') as string;
   const assignmentId = formData.get('assignmentId') as string;
 
   try {
-    const data = {
+    const data: any = {
       title,
       url,
     };
+    if (type) data.type = type;
 
     await pb.collection('links').update(linkId, data);
     

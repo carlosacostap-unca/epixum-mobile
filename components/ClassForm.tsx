@@ -15,9 +15,26 @@ export default function ClassForm({ clase, onClose }: ClassFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Helper to convert UTC date string to local datetime-local string
+  const getLocalDateTime = (isoDate: string) => {
+    if (!isoDate) return '';
+    const date = new Date(isoDate);
+    const offset = date.getTimezoneOffset();
+    const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+    return localDate.toISOString().slice(0, 16);
+  };
+
   async function handleSubmit(formData: FormData) {
     setLoading(true);
     setError(null);
+    
+    // Convert local datetime to UTC before sending
+    const dateStr = formData.get("date") as string;
+    if (dateStr) {
+        const date = new Date(dateStr);
+        formData.set("date", date.toISOString());
+    }
+
     try {
       let result;
       if (clase) {
@@ -89,10 +106,10 @@ export default function ClassForm({ clase, onClose }: ClassFormProps) {
             <input
               type="datetime-local"
               name="date"
-              id="date"
-              defaultValue={clase?.date ? new Date(clase.date).toISOString().slice(0, 16) : ''}
-              className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
-            />
+            id="date"
+            defaultValue={clase?.date ? getLocalDateTime(clase.date) : ''}
+            className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
+          />
           </div>
         </div>
 

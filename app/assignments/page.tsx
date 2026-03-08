@@ -1,7 +1,6 @@
 import { getAllAssignments } from "@/lib/data";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/pocketbase-server";
-import AssignmentForm from "@/components/AssignmentForm";
 import FormattedDate from "@/components/FormattedDate";
 
 export const dynamic = 'force-dynamic';
@@ -21,11 +20,14 @@ export default async function AssignmentsPage() {
       </div>
 
       {isTeacher && (
-        <div className="mb-8">
-            <div className="bg-zinc-50 dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                <h3 className="text-lg font-semibold mb-4">Crear nuevo trabajo práctico</h3>
-                <AssignmentForm />
-            </div>
+        <div className="mb-8 flex justify-end">
+            <Link 
+                href="/assignments/new"
+                className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-sm"
+            >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                Añadir Nuevo Trabajo Práctico
+            </Link>
         </div>
       )}
 

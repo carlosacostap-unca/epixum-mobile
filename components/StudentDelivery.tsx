@@ -1,50 +1,313 @@
 "use client";
 
-import { createDelivery, updateDelivery } from "@/lib/actions";
+import { createDelivery, updateDelivery, getUploadUrl, getDeliveryDownloadUrl, ensureCorsConfigured } from "@/lib/actions";
 import { Delivery } from "@/types";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import JSZip from "jszip";
 
 interface StudentDeliveryProps {
   assignmentId: string;
   delivery: Delivery | null;
+  studentName: string;
+  assignmentTitle: string;
 }
 
-export default function StudentDelivery({ assignmentId, delivery }: StudentDeliveryProps) {
+export default function StudentDelivery({ assignmentId, delivery, studentName, assignmentTitle }: StudentDeliveryProps) {
   const [isEditing, setIsEditing] = useState(!delivery);
-  const [url, setUrl] = useState(delivery?.repositoryUrl || "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string>("");
+  const [currentStep, setCurrentStep] = useState<'idle' | 'compressing' | 'uploading' | 'saving' | 'completed'>('idle');
+  const [showCorsFix, setShowCorsFix] = useState(false);
+  const [selectedFolderName, setSelectedFolderName] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<{ file: File, path: string }[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   const isDelivered = !!delivery;
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      // files[0].webkitRelativePath usually starts with the folder name
+      const path = e.target.files[0].webkitRelativePath;
+      const folderName = path.split('/')[0];
+      setSelectedFolderName(`${folderName} (${e.target.files.length} archivos)`);
+      
+      const filesArray = Array.from(e.target.files).map(file => ({
+        file,
+        path: file.webkitRelativePath
+      }));
+      setSelectedFiles(filesArray);
+    } else {
+      setSelectedFolderName(null);
+      setSelectedFiles([]);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    const items = e.dataTransfer.items;
+    if (!items) return;
+
+    const files: { file: File, path: string }[] = [];
+    const queue: { entry: any, path: string }[] = [];
+
+    // Get all entries
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file') {
+        const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : (item as any).getAsFileSystemHandle ? await (item as any).getAsFileSystemHandle() : null;
+        if (entry) {
+          queue.push({ entry, path: entry.name });
+        }
+      }
+    }
+
+    if (queue.length === 0) return;
+
+    // Process queue
+    setStatus("Analizando archivos...");
+    try {
+        while (queue.length > 0) {
+        const { entry, path } = queue.shift()!;
+        
+        if (entry.isFile) {
+            const file = await new Promise<File>((resolve, reject) => {
+            entry.file(resolve, reject);
+            });
+            files.push({ file, path });
+        } else if (entry.isDirectory) {
+            const reader = entry.createReader();
+            const entries = await new Promise<any[]>((resolve, reject) => {
+            const result: any[] = [];
+            function read() {
+                reader.readEntries((batch: any[]) => {
+                if (batch.length === 0) {
+                    resolve(result);
+                } else {
+                    result.push(...batch);
+                    read();
+                }
+                }, reject);
+            }
+            read();
+            });
+            
+            for (const child of entries) {
+            queue.push({ entry: child, path: `${path}/${child.name}` });
+            }
+        }
+        }
+
+        if (files.length > 0) {
+            const folderName = files[0].path.split('/')[0];
+            setSelectedFolderName(`${folderName} (${files.length} archivos)`);
+            setSelectedFiles(files);
+        }
+    } catch (err) {
+        console.error("Error analyzing dropped files:", err);
+        setError("Error al leer la carpeta arrastrada. Intenta usar el botón de selección.");
+    } finally {
+        setStatus("");
+    }
+  };
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!delivery) return;
+    
+    // Show temporary loading state if needed, or just open
+    try {
+        const result = await getDeliveryDownloadUrl(delivery.id);
+        if (result.success && result.url) {
+            window.open(result.url, '_blank');
+        } else {
+            alert(result.error || "No se pudo obtener el enlace de descarga");
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Error al intentar descargar el archivo");
+    }
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
+    
+    if (selectedFiles.length === 0 && !delivery) {
+      setError("Debes seleccionar una carpeta para subir");
+      return;
+    }
 
-    const formData = new FormData();
-    formData.append("assignmentId", assignmentId);
-    formData.append("repositoryUrl", url);
+    if (selectedFiles.length === 0 && delivery) {
+        setError("Debes seleccionar una carpeta para actualizar tu entrega");
+        return;
+    }
+
+    setLoading(true);
+    setCurrentStep('compressing');
+    setError(null);
+    setStatus("Preparando archivos...");
 
     try {
+      const zip = new JSZip();
+      
+      // Add files to zip
+      setStatus("Comprimiendo carpeta...");
+      let fileCount = 0;
+      for (const { file, path } of selectedFiles) {
+        zip.file(path, file);
+        fileCount++;
+      }
+
+      if (fileCount === 0) {
+        throw new Error("No se encontraron archivos en la carpeta seleccionada");
+      }
+
+      // Generate zip blob
+      const blob = await zip.generateAsync({ type: "blob" });
+      
+      // Generate filename: StudentName_AssignmentTitle.zip
+      const safeStudentName = studentName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const safeAssignmentTitle = assignmentTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const filename = `${safeStudentName}_${safeAssignmentTitle}.zip`;
+
+      // Get upload URL
+      setStatus("Obteniendo autorización de subida...");
+      // Stay in compressing step or move to uploading? Let's keep compressing/preparing until we have the URL
+      
+      const uploadAuth = await getUploadUrl(filename, "application/zip");
+
+      if (!uploadAuth.success || !uploadAuth.url) {
+        throw new Error(uploadAuth.error || "No se pudo obtener la URL de subida");
+      }
+
+      // Upload to S3
+      setCurrentStep('uploading');
+      setStatus("Subiendo archivo a iDrive...");
+      
+      const uploadResponse = await fetch(uploadAuth.url, {
+        method: "PUT",
+        body: blob,
+        headers: {
+            "Content-Type": "application/zip",
+        }
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("Error al subir el archivo a iDrive. Verifica tu conexión o intenta nuevamente.");
+      }
+
+      // Calculate final file URL
+      const fileUrl = uploadAuth.url.split('?')[0];
+
+      // Save delivery record
+      setCurrentStep('saving');
+      setStatus("Guardando entrega...");
+      
+      const formData = new FormData();
+      formData.append("assignmentId", assignmentId);
+      formData.append("repositoryUrl", fileUrl);
+
       const result = delivery 
         ? await updateDelivery(delivery.id, formData)
         : await createDelivery(formData);
 
       if (result.success) {
+        setCurrentStep('completed');
         setIsEditing(false);
+        setStatus("");
         router.refresh();
       } else {
         setError(result.error || "Error al guardar la entrega");
+        setCurrentStep('idle');
       }
-    } catch (err) {
-      setError("Ocurrió un error inesperado");
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Ocurrió un error inesperado");
+      setCurrentStep('idle');
+      setShowCorsFix(true);
     } finally {
       setLoading(false);
+      if (currentStep !== 'completed') {
+          // Keep 'completed' state if successful so UI doesn't flash back
+          // actually we set isEditing(false) on success, so this component unmounts/re-renders in view mode
+      }
     }
   }
+
+  const handleCorsFix = async () => {
+    setStatus("Configurando conexión...");
+    try {
+        const res = await ensureCorsConfigured();
+        if (res.success) {
+            alert("Configuración aplicada. Por favor intenta subir la carpeta nuevamente.");
+            setShowCorsFix(false);
+            setError(null);
+        } else {
+            alert("No se pudo configurar automáticamente: " + res.error);
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Error al intentar configurar");
+    } finally {
+        setStatus("");
+    }
+  };
+
+  // Progress UI Component
+  const ProgressSteps = () => (
+    <div className="w-full py-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex flex-col items-center">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                currentStep === 'compressing' || currentStep === 'uploading' || currentStep === 'saving' || currentStep === 'completed'
+                ? 'bg-blue-600 text-white' 
+                : 'bg-zinc-200 text-zinc-500'
+            }`}>1</div>
+            <span className="text-xs mt-1 text-zinc-600">Compresión</span>
+        </div>
+        <div className={`flex-1 h-1 mx-2 ${
+            currentStep === 'uploading' || currentStep === 'saving' || currentStep === 'completed' ? 'bg-blue-600' : 'bg-zinc-200'
+        }`}></div>
+        <div className="flex flex-col items-center">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                currentStep === 'uploading' || currentStep === 'saving' || currentStep === 'completed'
+                ? 'bg-blue-600 text-white' 
+                : 'bg-zinc-200 text-zinc-500'
+            }`}>2</div>
+            <span className="text-xs mt-1 text-zinc-600">Subida</span>
+        </div>
+        <div className={`flex-1 h-1 mx-2 ${
+            currentStep === 'saving' || currentStep === 'completed' ? 'bg-blue-600' : 'bg-zinc-200'
+        }`}></div>
+        <div className="flex flex-col items-center">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                currentStep === 'saving' || currentStep === 'completed'
+                ? 'bg-blue-600 text-white' 
+                : 'bg-zinc-200 text-zinc-500'
+            }`}>3</div>
+            <span className="text-xs mt-1 text-zinc-600">Guardado</span>
+        </div>
+      </div>
+      <div className="text-center text-sm font-medium text-blue-600 mt-4 animate-pulse">
+        {status}
+      </div>
+    </div>
+  );
 
   return (
     <div className={`rounded-xl border p-6 transition-all ${
@@ -75,17 +338,25 @@ export default function StudentDelivery({ assignmentId, delivery }: StudentDeliv
         
         <span className={`px-4 py-1.5 text-sm font-semibold rounded-full border ${
             isDelivered 
-                ? "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800" 
-                : "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-500 dark:border-yellow-800"
+            ? "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800" 
+            : "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-500 dark:border-yellow-800"
         }`}>
             {isDelivered ? "✅ Entregado" : "⏳ Pendiente"}
         </span>
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-center gap-2">
-          <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          {error}
+        <div className="mb-4 p-4 text-red-700 bg-red-100 rounded-lg dark:bg-red-900 dark:text-red-300">
+          <p>{error}</p>
+          {showCorsFix && (
+            <button 
+                type="button"
+                onClick={handleCorsFix}
+                className="mt-2 text-sm font-medium underline hover:text-red-900 dark:hover:text-red-100"
+            >
+                Diagnosticar y arreglar conexión (CORS)
+            </button>
+          )}
         </div>
       )}
 
@@ -94,20 +365,18 @@ export default function StudentDelivery({ assignmentId, delivery }: StudentDeliv
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
             <div className="flex-1 overflow-hidden">
                 <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 block">
-                  Repositorio Entregado
+                  Archivo Entregado
                 </label>
                 <div className="flex items-center gap-3 mb-4">
                     <div className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded text-zinc-500">
-                        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M13 9V3.5L18.5 9M6 2c-1.11 0-1.99.89-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6H6z"/></svg>
                     </div>
-                    <a 
-                      href={delivery.repositoryUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-lg font-medium text-blue-600 hover:text-blue-800 hover:underline truncate"
+                    <button
+                      onClick={handleDownload}
+                      className="text-lg font-medium text-blue-600 hover:text-blue-800 hover:underline truncate text-left"
                     >
-                      {delivery.repositoryUrl}
-                    </a>
+                      Descargar Entrega (.zip)
+                    </button>
                 </div>
                 
                 <div className="flex items-center gap-2 text-sm text-zinc-500 bg-zinc-50 dark:bg-zinc-800/50 py-2 px-3 rounded-md inline-flex">
@@ -128,49 +397,101 @@ export default function StudentDelivery({ assignmentId, delivery }: StudentDeliv
       ) : (
         <form onSubmit={handleSubmit} className="bg-zinc-50 dark:bg-zinc-900/50 rounded-xl p-6 border border-zinc-200 dark:border-zinc-700">
           <div className="mb-6">
-            <label htmlFor="repo-url" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-              URL del Repositorio (GitHub)
+            <label htmlFor="project-folder" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+              Carpeta del Proyecto
             </label>
-            <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-zinc-500 sm:text-sm">https://</span>
-                </div>
+            <div 
+              className={`relative border-2 border-dashed rounded-xl p-8 transition-all ${
+                isDragging 
+                  ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20" 
+                  : "border-zinc-300 dark:border-zinc-700 hover:border-purple-400 dark:hover:border-purple-500"
+              }`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
                 <input
-                  type="text"
-                  id="repo-url"
-                  value={url.replace(/^https?:\/\//, '')}
-                  onChange={(e) => setUrl(`https://${e.target.value.replace(/^https?:\/\//, '')}`)}
-                  placeholder="github.com/usuario/repositorio"
-                  className="block w-full pl-16 pr-12 py-3 sm:text-sm border-zinc-300 dark:border-zinc-600 rounded-lg focus:ring-purple-500 focus:border-purple-500 dark:bg-zinc-800 dark:text-white shadow-sm"
-                  required
+                  type="file"
+                  id="project-folder"
+                  ref={fileInputRef}
+                  {...({ webkitdirectory: "", directory: "" } as any)}
+                  className="hidden"
+                  onChange={handleFileChange}
                 />
+                <div className="flex flex-col items-center justify-center text-center gap-3">
+                  <div className={`p-4 rounded-full ${
+                    selectedFolderName 
+                      ? "bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400" 
+                      : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
+                  }`}>
+                    {selectedFolderName ? (
+                        <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+                    ) : (
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                    )}
+                  </div>
+                  
+                  {selectedFolderName ? (
+                    <div>
+                        <p className="font-medium text-zinc-900 dark:text-zinc-100 mb-1">{selectedFolderName}</p>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSelectedFolderName(null);
+                                setSelectedFiles([]);
+                                if (fileInputRef.current) fileInputRef.current.value = "";
+                            }}
+                            className="text-xs text-red-500 hover:text-red-700 hover:underline"
+                        >
+                            Eliminar selección
+                        </button>
+                    </div>
+                  ) : (
+                    <>
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                className="font-semibold text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 hover:underline"
+                            >
+                                Selecciona una carpeta
+                            </button>
+                            {" "}o arrástrala aquí
+                        </p>
+                        <p className="text-xs text-zinc-500">
+                            Se comprimirá automáticamente en un archivo ZIP
+                        </p>
+                    </>
+                  )}
+                </div>
             </div>
-            <p className="mt-2 text-sm text-zinc-500">
-                Asegúrate de que el repositorio sea público o accesible para los docentes.
-            </p>
           </div>
 
           <div className="flex items-center justify-end gap-3">
-            {isDelivered && (
-                <button
-                    type="button"
-                    onClick={() => {
-                        setIsEditing(false);
-                        setUrl(delivery?.repositoryUrl || "");
-                    }}
-                    className="px-4 py-2 text-sm font-medium text-zinc-700 bg-white border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors"
-                >
-                    Cancelar
-                </button>
+            {loading ? (
+                <ProgressSteps />
+            ) : (
+                <>
+                    {isDelivered && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsEditing(false);
+                            }}
+                            className="px-4 py-2 text-sm font-medium text-zinc-700 bg-white border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                    )}
+                    <button
+                    type="submit"
+                    disabled={loading}
+                    className="px-6 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
+                    >
+                    {delivery ? "Modificar Entrega" : "Realizar Entrega"}
+                    </button>
+                </>
             )}
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-6 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
-            >
-              {loading && <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>}
-              {delivery ? "Modificar Entrega" : "Realizar Entrega"}
-            </button>
           </div>
         </form>
       )}
