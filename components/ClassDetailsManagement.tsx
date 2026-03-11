@@ -36,6 +36,10 @@ export default function ClassDetailsManagement({ user, classData, links, inquiri
            link.url.includes('epixum-javascript-storage');
   };
 
+  const isSlideResource = (link: LinkType) => {
+    return link.type === 'slide';
+  };
+
   const handleResourceClick = async (e: React.MouseEvent, link: LinkType) => {
     if (isFileResource(link)) {
         e.preventDefault();
@@ -159,16 +163,28 @@ export default function ClassDetailsManagement({ user, classData, links, inquiri
                     className="block h-full"
                 >
                     <div className="flex items-center justify-between mb-2">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${isFileResource(link) ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-200' : 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200'}`}>
-                        {isFileResource(link) ? 'ARCHIVO' : 'LINK'}
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        isFileResource(link) ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-200' : 
+                        isSlideResource(link) ? 'bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-200' :
+                        'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200'
+                    }`}>
+                        {isFileResource(link) ? 'ARCHIVO' : isSlideResource(link) ? 'DIAPOSITIVA' : 'LINK'}
                     </span>
                     {isFileResource(link) ? (
                         <svg className="w-5 h-5 text-zinc-400 group-hover:text-purple-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                    ) : isSlideResource(link) ? (
+                        <svg className="w-5 h-5 text-zinc-400 group-hover:text-orange-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 13v-1m4 1v-3m4 3V8M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                        </svg>
                     ) : (
                         <svg className="w-5 h-5 text-zinc-400 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                     )}
                     </div>
-                    <h3 className={`text-lg font-bold transition-colors pr-8 ${isFileResource(link) ? 'group-hover:text-purple-600 dark:group-hover:text-purple-400' : 'group-hover:text-blue-600 dark:group-hover:text-blue-400'}`}>
+                    <h3 className={`text-lg font-bold transition-colors pr-8 ${
+                        isFileResource(link) ? 'group-hover:text-purple-600 dark:group-hover:text-purple-400' : 
+                        isSlideResource(link) ? 'group-hover:text-orange-600 dark:group-hover:text-orange-400' :
+                        'group-hover:text-blue-600 dark:group-hover:text-blue-400'
+                    }`}>
                     {link.title}
                     </h3>
                     <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 truncate">

@@ -331,9 +331,13 @@ export async function createLink(formData: FormData) {
     if (assignmentId) revalidatePath(`/assignments/${assignmentId}`);
     
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to create link:', error);
-    return { success: false, error: 'Failed to create link' };
+    // Log detailed error from PocketBase
+    if (error.response) {
+      console.error('PocketBase response error:', JSON.stringify(error.response, null, 2));
+    }
+    return { success: false, error: 'Failed to create link: ' + (error.message || String(error)) };
   }
 }
 

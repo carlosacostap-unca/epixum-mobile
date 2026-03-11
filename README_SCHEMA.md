@@ -1,6 +1,6 @@
 # Configuración de PocketBase para Epixum Node
 
-Para que la aplicación funcione correctamente, necesitas crear las siguientes colecciones en tu instancia de PocketBase (`https://epixum-node.pockethost.io/`).
+Para que la aplicación funcione correctamente, necesitas crear las siguientes colecciones en tu instancia de PocketBase (`https://pocketbase-mobile.epixum.com/_/`).
 
 ## 1. Colección: `courses` (Opcional por ahora, pero recomendada)
 - **Name**: `courses`
@@ -63,7 +63,8 @@ Para que el rol "Docente" pueda gestionar el contenido, debes configurar las sig
 - **Type**: `Base`
 - **Fields**:
     - `title`: Text (Required)
-    - `url`: URL (Required)
+    - `url`: Text (Required) (Cambiar de URL a Text para permitir rutas relativas de diapositivas)
+    - `type`: Select (Required, options: "link", "file", "slide") (Default: "link")
     - `class`: Relation (Single, Optional) -> Collection: `classes`
     - `assignment`: Relation (Single, Optional) -> Collection: `assignments`
 

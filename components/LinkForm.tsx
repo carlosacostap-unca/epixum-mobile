@@ -3,7 +3,8 @@
 import { createLink, updateLink, getResourceUploadUrl } from "@/lib/actions";
 import { Link as LinkType } from "@/types";
 import { useRouter } from "next/navigation";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { getAvailableSlides, SlideOption } from "@/lib/actions-slides";
 
 interface LinkFormProps {
   link?: LinkType;
@@ -17,9 +18,29 @@ export default function LinkForm({ link, classId, assignmentId, onClose, isEmbed
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [resourceType, setResourceType] = useState<'link' | 'file'>(link?.type || 'link');
+  const [resourceType, setResourceType] = useState<'link' | 'file' | 'slide'>(link?.type || 'link');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [slides, setSlides] = useState<SlideOption[]>([]);
+  const [loadingSlides, setLoadingSlides] = useState(false);
+  const [selectedSlidePath, setSelectedSlidePath] = useState<string>(link?.type === 'slide' ? link.url : "");
+
+  useEffect(() => {
+    if (resourceType === 'slide') {
+      setLoadingSlides(true);
+      getAvailableSlides()
+        .then(res => {
+          if (res.success) {
+            setSlides(res.slides);
+            if (!selectedSlidePath && res.slides.length > 0 && !link) {
+              setSelectedSlidePath(res.slides[0].path);
+            }
+          }
+        })
+        .finally(() => setLoadingSlides(false));
+    }
+  }, [resourceType]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -65,6 +86,11 @@ export default function LinkForm({ link, classId, assignmentId, onClose, isEmbed
         } else if (link) {
             // Keep existing URL if editing and no new file selected
             url = link.url;
+        }
+      } else if (resourceType === 'slide') {
+        url = selectedSlidePath;
+        if (!url) {
+          throw new Error("Debes seleccionar una diapositiva");
         }
       }
 
@@ -142,6 +168,17 @@ export default function LinkForm({ link, classId, assignmentId, onClose, isEmbed
               />
               <span className="text-sm font-medium text-gray-900 dark:text-gray-300">Archivo</span>
             </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="resourceType"
+                value="slide"
+                checked={resourceType === 'slide'}
+                onChange={() => setResourceType('slide')}
+                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+              />
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-300">Diapositiva</span>
+            </label>
           </div>
         </div>
 
@@ -155,12 +192,16 @@ export default function LinkForm({ link, classId, assignmentId, onClose, isEmbed
             id="title"
             defaultValue={link?.title}
             required
-            placeholder={resourceType === 'link' ? "Ej: Documentación oficial" : "Ej: Guía de estudio PDF"}
+            placeholder={
+              resourceType === 'link' ? "Ej: Documentación oficial" : 
+              resourceType === 'file' ? "Ej: Guía de estudio PDF" :
+              "Ej: Clase 1 - Introducción"
+            }
             className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
           />
         </div>
 
-        {resourceType === 'link' ? (
+        {resourceType === 'link' && (
           <div>
             <label htmlFor="url" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
               URL
@@ -175,7 +216,9 @@ export default function LinkForm({ link, classId, assignmentId, onClose, isEmbed
               className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
             />
           </div>
-        ) : (
+        )}
+
+        {resourceType === 'file' && (
           <div>
             <label htmlFor="file" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
               Archivo
@@ -198,13 +241,33 @@ export default function LinkForm({ link, classId, assignmentId, onClose, isEmbed
                 Seleccionar archivo
               </button>
               <span className="text-sm text-zinc-600 dark:text-zinc-400 truncate max-w-xs">
-                {selectedFile ? selectedFile.name : "Ningún archivo seleccionado"}
+                {selectedFile ? selectedFile.name : (link ? "Archivo actual: " + link.url.split('/').pop() : "Ningún archivo seleccionado")}
               </span>
             </div>
-            {link && link.type === 'file' && !selectedFile && (
-              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                Archivo actual: <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">{link.url.split('/').pop()}</a>
-              </p>
+          </div>
+        )}
+
+        {resourceType === 'slide' && (
+          <div>
+            <label htmlFor="slide" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+              Seleccionar Diapositiva
+            </label>
+            {loadingSlides ? (
+              <div className="text-sm text-zinc-500">Cargando diapositivas...</div>
+            ) : (
+              <select
+                id="slide"
+                value={selectedSlidePath}
+                onChange={(e) => setSelectedSlidePath(e.target.value)}
+                className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
+              >
+                {slides.length === 0 && <option value="">No hay diapositivas disponibles</option>}
+                {slides.map(slide => (
+                  <option key={slide.path} value={slide.path}>
+                    {slide.title}
+                  </option>
+                ))}
+              </select>
             )}
           </div>
         )}
@@ -214,7 +277,8 @@ export default function LinkForm({ link, classId, assignmentId, onClose, isEmbed
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-md transition-colors"
+              disabled={loading}
+              className="px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               Cancelar
             </button>
@@ -222,9 +286,15 @@ export default function LinkForm({ link, classId, assignmentId, onClose, isEmbed
           <button
             type="submit"
             disabled={loading}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {loading ? (resourceType === 'file' ? "Subiendo..." : "Guardando...") : (link ? "Actualizar" : "Crear")}
+            {loading && (
+              <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            )}
+            {link ? "Guardar Cambios" : "Crear Recurso"}
           </button>
         </div>
       </form>

@@ -23,6 +23,16 @@ export default function AssignmentDetailsManagement({ user, assignment, links, i
   
   const router = useRouter();
 
+  const isFileResource = (link: LinkType) => {
+    return link.type === 'file' || 
+           link.url.includes('idrivee2.com') || 
+           link.url.includes('epixum-javascript-storage');
+  };
+
+  const isSlideResource = (link: LinkType) => {
+    return link.type === 'slide';
+  };
+
   const handleDeleteLink = async (linkId: string) => {
     if (confirm("¿Estás seguro de que quieres eliminar este enlace?")) {
       await deleteLink(linkId, assignment.id, 'assignment');
@@ -105,16 +115,31 @@ export default function AssignmentDetailsManagement({ user, assignment, links, i
                 <a href={link.url} target="_blank" rel="noopener noreferrer" className="block h-full">
                     <div className="flex items-center justify-between mb-2">
                         <div>
-                            <h3 className="text-lg font-bold group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors pr-8">
+                            <h3 className={`text-lg font-bold transition-colors pr-8 ${
+                                isFileResource(link) ? 'group-hover:text-purple-600 dark:group-hover:text-purple-400' : 
+                                isSlideResource(link) ? 'group-hover:text-orange-600 dark:group-hover:text-orange-400' :
+                                'group-hover:text-blue-600 dark:group-hover:text-blue-400'
+                            }`}>
                             {link.title}
                             </h3>
                             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 truncate max-w-[200px]">
-                                {link.url}
+                                {isFileResource(link) ? link.url.split('/').pop() : link.url}
                             </p>
                         </div>
-                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
-                            LINK
-                        </span>
+                        <div className="flex flex-col items-end gap-2">
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                isFileResource(link) ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-200' : 
+                                isSlideResource(link) ? 'bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-200' :
+                                'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200'
+                            }`}>
+                                {isFileResource(link) ? 'ARCHIVO' : isSlideResource(link) ? 'DIAPOSITIVA' : 'LINK'}
+                            </span>
+                            {isSlideResource(link) && (
+                                <svg className="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 13v-1m4 1v-3m4 3V8M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                                </svg>
+                            )}
+                        </div>
                     </div>
                 </a>
               </div>
