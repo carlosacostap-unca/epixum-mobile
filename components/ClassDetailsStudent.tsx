@@ -3,8 +3,8 @@
 import { Class, Link as LinkType, User, Inquiry } from "@/types";
 import Link from "next/link";
 import FormattedDate from "@/components/FormattedDate";
-import { getResourceDownloadUrl } from "@/lib/actions";
 import InquiryList from "./inquiries/InquiryList";
+import ResourceLink from "./ResourceLink";
 
 interface ClassDetailsStudentProps {
   user: User | null;
@@ -19,23 +19,6 @@ export default function ClassDetailsStudent({ user, classData, links, inquiries 
     return link.type === 'file' || 
            link.url.includes('idrivee2.com') || 
            link.url.includes('epixum-javascript-storage');
-  };
-
-  const handleResourceClick = async (e: React.MouseEvent, link: LinkType) => {
-    if (isFileResource(link)) {
-        e.preventDefault();
-        try {
-            const result = await getResourceDownloadUrl(link.id);
-            if (result.success && result.url) {
-                window.open(result.url, '_blank');
-            } else {
-                alert("No se pudo descargar el archivo.");
-            }
-        } catch (error) {
-            console.error(error);
-            alert("Error al descargar el archivo.");
-        }
-    }
   };
 
   return (
@@ -67,11 +50,8 @@ export default function ClassDetailsStudent({ user, classData, links, inquiries 
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {links.map((link) => (
-              <a 
-                href={isFileResource(link) ? '#' : link.url} 
-                target={isFileResource(link) ? undefined : "_blank"}
-                rel={isFileResource(link) ? undefined : "noopener noreferrer"}
-                onClick={(e) => handleResourceClick(e, link)}
+              <ResourceLink 
+                link={link}
                 key={link.id}
                 className="block p-6 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:shadow-lg transition-all group"
               >
@@ -91,7 +71,7 @@ export default function ClassDetailsStudent({ user, classData, links, inquiries 
                 <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 truncate">
                     {isFileResource(link) ? link.url.split('/').pop() : link.url}
                 </p>
-              </a>
+              </ResourceLink>
             ))}
           </div>
         )}

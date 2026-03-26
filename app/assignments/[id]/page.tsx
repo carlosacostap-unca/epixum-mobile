@@ -8,6 +8,7 @@ import StudentDelivery from "@/components/StudentDelivery";
 import TeacherDeliveries from "@/components/TeacherDeliveries";
 import { getInquiries } from "@/lib/actions-inquiries";
 import InquiryList from "@/components/inquiries/InquiryList";
+import ResourceLink from "@/components/ResourceLink";
 
 export const dynamic = 'force-dynamic';
 
@@ -75,10 +76,8 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {links.map((link) => (
-              <a 
-                href={link.url} 
-                target="_blank" 
-                rel="noopener noreferrer"
+              <ResourceLink 
+                link={link}
                 key={link.id}
                 className="block p-6 bg-white dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:shadow-lg transition-all group"
               >
@@ -88,14 +87,18 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                         {link.title}
                         </h3>
                         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 truncate max-w-[200px]">
-                            {link.url}
+                            {link.type === 'file' || link.url.includes('idrivee2.com') || link.url.includes('epixum-javascript-storage') ? link.url.split('/').pop() : link.url}
                         </p>
                     </div>
-                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
-                        LINK
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        link.type === 'file' || link.url.includes('idrivee2.com') || link.url.includes('epixum-javascript-storage') 
+                        ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-200' 
+                        : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300'
+                    }`}>
+                        {link.type === 'file' || link.url.includes('idrivee2.com') || link.url.includes('epixum-javascript-storage') ? 'ARCHIVO' : 'LINK'}
                     </span>
                 </div>
-              </a>
+              </ResourceLink>
             ))}
           </div>
         )}

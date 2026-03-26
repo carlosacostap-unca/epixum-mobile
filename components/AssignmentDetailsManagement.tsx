@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import AssignmentForm from "./AssignmentForm";
 import LinkForm from "./LinkForm";
 import InquiryList from "./inquiries/InquiryList";
+import ResourceLink from "./ResourceLink";
 
 interface AssignmentDetailsManagementProps {
   user: User;
@@ -112,7 +113,7 @@ export default function AssignmentDetailsManagement({ user, assignment, links, i
                      </button>
                  </div>
 
-                <a href={link.url} target="_blank" rel="noopener noreferrer" className="block h-full">
+                <ResourceLink link={link} className="block h-full">
                     <div className="flex items-center justify-between mb-2">
                         <div>
                             <h3 className={`text-lg font-bold transition-colors pr-8 ${
@@ -141,7 +142,7 @@ export default function AssignmentDetailsManagement({ user, assignment, links, i
                             )}
                         </div>
                     </div>
-                </a>
+                </ResourceLink>
               </div>
             ))}
           </div>

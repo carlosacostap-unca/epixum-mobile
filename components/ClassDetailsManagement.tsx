@@ -4,11 +4,12 @@ import { useState } from "react";
 import { Class, Link as LinkType, User, Inquiry } from "@/types";
 import Link from "next/link";
 import FormattedDate from "@/components/FormattedDate";
-import { deleteLink, getResourceDownloadUrl } from "@/lib/actions";
+import { deleteLink } from "@/lib/actions";
 import { useRouter } from "next/navigation";
 import ClassForm from "./ClassForm";
 import LinkForm from "./LinkForm";
 import InquiryList from "./inquiries/InquiryList";
+import ResourceLink from "./ResourceLink";
 
 interface ClassDetailsManagementProps {
   user: User;
@@ -38,23 +39,6 @@ export default function ClassDetailsManagement({ user, classData, links, inquiri
 
   const isSlideResource = (link: LinkType) => {
     return link.type === 'slide';
-  };
-
-  const handleResourceClick = async (e: React.MouseEvent, link: LinkType) => {
-    if (isFileResource(link)) {
-        e.preventDefault();
-        try {
-            const result = await getResourceDownloadUrl(link.id);
-            if (result.success && result.url) {
-                window.open(result.url, '_blank');
-            } else {
-                alert("No se pudo descargar el archivo.");
-            }
-        } catch (error) {
-            console.error(error);
-            alert("Error al descargar el archivo.");
-        }
-    }
   };
 
   return (
@@ -155,11 +139,8 @@ export default function ClassDetailsManagement({ user, classData, links, inquiri
                      </button>
                  </div>
 
-                <a 
-                    href={isFileResource(link) ? '#' : link.url} 
-                    target={isFileResource(link) ? undefined : "_blank"}
-                    rel={isFileResource(link) ? undefined : "noopener noreferrer"}
-                    onClick={(e) => handleResourceClick(e, link)}
+                <ResourceLink 
+                    link={link}
                     className="block h-full"
                 >
                     <div className="flex items-center justify-between mb-2">
@@ -190,7 +171,7 @@ export default function ClassDetailsManagement({ user, classData, links, inquiri
                     <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 truncate">
                         {isFileResource(link) ? link.url.split('/').pop() : link.url}
                     </p>
-                </a>
+                </ResourceLink>
               </div>
             ))}
           </div>
