@@ -55,6 +55,9 @@ export interface Delivery extends BaseModel {
   assignment: string;
   student: string;
   repositoryUrl: string;
+  verdict?: 'Pendiente' | 'Aprobado' | 'Rehacer' | 'Desaprobado';
+  grade?: string;
+  feedback?: string;
   expand?: {
     student?: User;
   };

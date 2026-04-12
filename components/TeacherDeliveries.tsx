@@ -3,6 +3,7 @@
 import { Delivery } from "@/types";
 import { useState } from "react";
 import { getDeliveryDownloadUrl } from "@/lib/actions";
+import EvaluateDeliveryModal from "./EvaluateDeliveryModal";
 
 interface TeacherDeliveriesProps {
   deliveries: Delivery[];
@@ -12,6 +13,7 @@ interface TeacherDeliveriesProps {
 export default function TeacherDeliveries({ deliveries, assignmentId }: TeacherDeliveriesProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [evaluatingDelivery, setEvaluatingDelivery] = useState<Delivery | null>(null);
   
   const pbUrl = process.env.NEXT_PUBLIC_POCKETBASE_URL?.replace(/\/$/, "") || "";
 
@@ -73,6 +75,12 @@ export default function TeacherDeliveries({ deliveries, assignmentId }: TeacherD
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 dark:text-zinc-300 uppercase tracking-wider">
                 Fecha
               </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 dark:text-zinc-300 uppercase tracking-wider">
+                Evaluación
+              </th>
+              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-zinc-500 dark:text-zinc-300 uppercase tracking-wider">
+                Acciones
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-700">
@@ -123,12 +131,38 @@ export default function TeacherDeliveries({ deliveries, assignmentId }: TeacherD
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-500 dark:text-zinc-400">
                     {new Date(delivery.created).toLocaleDateString()}
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {delivery.verdict ? (
+                      <div className="flex flex-col">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium w-fit
+                          ${delivery.verdict === 'Aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
+                            delivery.verdict === 'Desaprobado' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 
+                            delivery.verdict === 'Rehacer' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}`}>
+                          {delivery.verdict}
+                        </span>
+                        {delivery.grade && (
+                          <span className="text-xs text-zinc-500 mt-1">Nota: {delivery.grade}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-zinc-400 italic">Sin evaluar</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <button
+                      onClick={() => setEvaluatingDelivery(delivery)}
+                      className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      Evaluar
+                    </button>
+                  </td>
                 </tr>
                 );
               })
             ) : (
               <tr>
-                <td colSpan={5} className="px-6 py-4 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                <td colSpan={6} className="px-6 py-4 text-center text-sm text-zinc-500 dark:text-zinc-400">
                   No hay entregas registradas
                 </td>
               </tr>
@@ -136,6 +170,14 @@ export default function TeacherDeliveries({ deliveries, assignmentId }: TeacherD
           </tbody>
         </table>
       </div>
+
+      {evaluatingDelivery && (
+        <EvaluateDeliveryModal
+          delivery={evaluatingDelivery}
+          assignmentId={assignmentId}
+          onClose={() => setEvaluatingDelivery(null)}
+        />
+      )}
     </div>
   );
 }

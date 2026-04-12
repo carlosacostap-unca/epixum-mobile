@@ -435,6 +435,40 @@ export async function createDelivery(formData: FormData) {
   }
 }
 
+export async function evaluateDelivery(deliveryId: string, formData: FormData) {
+  const pb = await createServerClient();
+  const user = pb.authStore.model;
+
+  if (!user || (user.role !== 'docente' && user.role !== 'admin')) {
+    return { success: false, error: 'Unauthorized: Only teachers or admins can evaluate' };
+  }
+
+  const verdict = formData.get('verdict') as string;
+  const grade = formData.get('grade') as string;
+  const feedback = formData.get('feedback') as string;
+  const assignmentId = formData.get('assignmentId') as string;
+
+  if (!verdict) {
+     return { success: false, error: 'Verdict is required' };
+  }
+
+  try {
+    const data = {
+      verdict,
+      grade,
+      feedback,
+    };
+
+    await pb.collection('deliveries').update(deliveryId, data);
+    
+    if (assignmentId) revalidatePath(`/assignments/${assignmentId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to evaluate delivery:', error);
+    return { success: false, error: 'Failed to evaluate delivery' };
+  }
+}
+
 export async function updateDelivery(deliveryId: string, formData: FormData) {
   const pb = await createServerClient();
   const user = pb.authStore.model;
@@ -443,7 +477,6 @@ export async function updateDelivery(deliveryId: string, formData: FormData) {
     return { success: false, error: 'Unauthorized' };
   }
 
-  // We need to fetch the delivery to check ownership, 
   // although PocketBase API rules should handle this, it's good to be explicit or just try/catch
   
   const repositoryUrl = (formData.get('repositoryUrl') as string)?.trim();
