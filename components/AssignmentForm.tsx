@@ -81,7 +81,22 @@ export default function AssignmentForm({ assignment, onClose, isEmbedded = false
             />
           </div>
 
-          <div className="flex justify-end gap-3 mt-6">
+          <div>
+          <label htmlFor="deliveryType" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+            Tipo de Entrega
+          </label>
+          <select
+            name="deliveryType"
+            id="deliveryType"
+            defaultValue={assignment?.deliveryType || 'file'}
+            className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
+          >
+            <option value="file">Subida de carpeta/archivo (.zip)</option>
+            <option value="github">Subida de URL de repositorio</option>
+          </select>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-6">
             {onClose && (
               <button
                 type="button"

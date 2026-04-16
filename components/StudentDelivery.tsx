@@ -11,9 +11,10 @@ interface StudentDeliveryProps {
   delivery: Delivery | null;
   studentName: string;
   assignmentTitle: string;
+  deliveryType?: 'file' | 'github';
 }
 
-export default function StudentDelivery({ assignmentId, delivery, studentName, assignmentTitle }: StudentDeliveryProps) {
+export default function StudentDelivery({ assignmentId, delivery, studentName, assignmentTitle, deliveryType = 'file' }: StudentDeliveryProps) {
   const [isEditing, setIsEditing] = useState(!delivery);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +23,7 @@ export default function StudentDelivery({ assignmentId, delivery, studentName, a
   const [showCorsFix, setShowCorsFix] = useState(false);
   const [selectedFolderName, setSelectedFolderName] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<{ file: File, path: string }[]>([]);
+  const [repositoryUrl, setRepositoryUrl] = useState(delivery?.repositoryUrl || "");
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -147,6 +149,45 @@ export default function StudentDelivery({ assignmentId, delivery, studentName, a
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     
+    if (deliveryType === 'github') {
+      if (!repositoryUrl.trim()) {
+        setError("Debes ingresar la URL del repositorio");
+        return;
+      }
+
+      setLoading(true);
+      setCurrentStep('saving');
+      setError(null);
+      setStatus("Guardando entrega...");
+
+      try {
+        const formData = new FormData();
+        formData.append("assignmentId", assignmentId);
+        formData.append("repositoryUrl", repositoryUrl);
+
+        const result = delivery 
+          ? await updateDelivery(delivery.id, formData)
+          : await createDelivery(formData);
+
+        if (result.success) {
+          setCurrentStep('completed');
+          setIsEditing(false);
+          setStatus("");
+          router.refresh();
+        } else {
+          setError(result.error || "Error al guardar la entrega");
+          setCurrentStep('idle');
+        }
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || "Ocurrió un error inesperado");
+        setCurrentStep('idle');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (selectedFiles.length === 0 && !delivery) {
       setError("Debes seleccionar una carpeta para subir");
       return;
@@ -366,18 +407,33 @@ export default function StudentDelivery({ assignmentId, delivery, studentName, a
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
               <div className="flex-1 overflow-hidden">
                   <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 block">
-                    Archivo Entregado
+                    {deliveryType === 'github' ? 'Repositorio Entregado' : 'Archivo Entregado'}
                   </label>
                   <div className="flex items-center gap-3 mb-4">
                       <div className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded text-zinc-500">
-                          <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M13 9V3.5L18.5 9M6 2c-1.11 0-1.99.89-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6H6z"/></svg>
+                          {deliveryType === 'github' ? (
+                            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.699-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>
+                          ) : (
+                            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M13 9V3.5L18.5 9M6 2c-1.11 0-1.99.89-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6H6z"/></svg>
+                          )}
                       </div>
-                      <button
-                        onClick={handleDownload}
-                        className="text-lg font-medium text-blue-600 hover:text-blue-800 hover:underline truncate text-left"
-                      >
-                        Descargar Entrega (.zip)
-                      </button>
+                      {deliveryType === 'github' ? (
+                        <a
+                          href={delivery.repositoryUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-lg font-medium text-blue-600 hover:text-blue-800 hover:underline truncate text-left"
+                        >
+                          Ver Repositorio
+                        </a>
+                      ) : (
+                        <button
+                          onClick={handleDownload}
+                          className="text-lg font-medium text-blue-600 hover:text-blue-800 hover:underline truncate text-left"
+                        >
+                          Descargar Entrega (.zip)
+                        </button>
+                      )}
                   </div>
                   
                   <div className="flex items-center gap-2 text-sm text-zinc-500 bg-zinc-50 dark:bg-zinc-800/50 py-2 px-3 rounded-md inline-flex">
@@ -438,74 +494,93 @@ export default function StudentDelivery({ assignmentId, delivery, studentName, a
       ) : (
         <form onSubmit={handleSubmit} className="bg-zinc-50 dark:bg-zinc-900/50 rounded-xl p-6 border border-zinc-200 dark:border-zinc-700">
           <div className="mb-6">
-            <label htmlFor="project-folder" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-              Carpeta del Proyecto
-            </label>
-            <div 
-              className={`relative border-2 border-dashed rounded-xl p-8 transition-all ${
-                isDragging 
-                  ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20" 
-                  : "border-zinc-300 dark:border-zinc-700 hover:border-purple-400 dark:hover:border-purple-500"
-              }`}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
+            {deliveryType === 'github' ? (
+              <div>
+                <label htmlFor="repositoryUrl" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                  URL del Repositorio (GitHub)
+                </label>
                 <input
-                  type="file"
-                  id="project-folder"
-                  ref={fileInputRef}
-                  {...({ webkitdirectory: "", directory: "" } as any)}
-                  className="hidden"
-                  onChange={handleFileChange}
+                  type="url"
+                  id="repositoryUrl"
+                  value={repositoryUrl}
+                  onChange={(e) => setRepositoryUrl(e.target.value)}
+                  placeholder="https://github.com/usuario/repositorio"
+                  className="w-full px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-colors"
+                  required
                 />
-                <div className="flex flex-col items-center justify-center text-center gap-3">
-                  <div className={`p-4 rounded-full ${
-                    selectedFolderName 
-                      ? "bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400" 
-                      : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
-                  }`}>
-                    {selectedFolderName ? (
-                        <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
-                    ) : (
-                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                    )}
-                  </div>
-                  
-                  {selectedFolderName ? (
-                    <div>
-                        <p className="font-medium text-zinc-900 dark:text-zinc-100 mb-1">{selectedFolderName}</p>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setSelectedFolderName(null);
-                                setSelectedFiles([]);
-                                if (fileInputRef.current) fileInputRef.current.value = "";
-                            }}
-                            className="text-xs text-red-500 hover:text-red-700 hover:underline"
-                        >
-                            Eliminar selección
-                        </button>
-                    </div>
-                  ) : (
-                    <>
-                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              </div>
+            ) : (
+              <>
+                <label htmlFor="project-folder" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                  Carpeta del Proyecto
+                </label>
+                <div 
+                  className={`relative border-2 border-dashed rounded-xl p-8 transition-all ${
+                    isDragging 
+                      ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20" 
+                      : "border-zinc-300 dark:border-zinc-700 hover:border-purple-400 dark:hover:border-purple-500"
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                    <input
+                      type="file"
+                      id="project-folder"
+                      ref={fileInputRef}
+                      {...({ webkitdirectory: "", directory: "" } as any)}
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
+                    <div className="flex flex-col items-center justify-center text-center gap-3">
+                      <div className={`p-4 rounded-full ${
+                        selectedFolderName 
+                          ? "bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400" 
+                          : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
+                      }`}>
+                        {selectedFolderName ? (
+                            <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+                        ) : (
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                        )}
+                      </div>
+                      
+                      {selectedFolderName ? (
+                        <div>
+                            <p className="font-medium text-zinc-900 dark:text-zinc-100 mb-1">{selectedFolderName}</p>
                             <button
                                 type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                className="font-semibold text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 hover:underline"
+                                onClick={() => {
+                                    setSelectedFolderName(null);
+                                    setSelectedFiles([]);
+                                    if (fileInputRef.current) fileInputRef.current.value = "";
+                                }}
+                                className="text-xs text-red-500 hover:text-red-700 hover:underline"
                             >
-                                Selecciona una carpeta
+                                Eliminar selección
                             </button>
-                            {" "}o arrástrala aquí
-                        </p>
-                        <p className="text-xs text-zinc-500">
-                            Se comprimirá automáticamente en un archivo ZIP
-                        </p>
-                    </>
-                  )}
+                        </div>
+                      ) : (
+                        <>
+                            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="font-semibold text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 hover:underline"
+                                >
+                                    Selecciona una carpeta
+                                </button>
+                                {" "}o arrástrala aquí
+                            </p>
+                            <p className="text-xs text-zinc-500">
+                                Se comprimirá automáticamente en un archivo ZIP
+                            </p>
+                        </>
+                      )}
+                    </div>
                 </div>
-            </div>
+              </>
+            )}
           </div>
 
           <div className="flex items-center justify-end gap-3">

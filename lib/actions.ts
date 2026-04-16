@@ -227,6 +227,7 @@ export async function createAssignment(formData: FormData) {
   const title = formData.get('title') as string;
   const description = formData.get('description') as string;
   const dueDate = formData.get('dueDate') as string;
+  const deliveryType = formData.get('deliveryType') as string;
 
   if (!title) {
      return { success: false, error: 'Title is required' };
@@ -236,6 +237,7 @@ export async function createAssignment(formData: FormData) {
     const data: any = {
       title,
       description,
+      deliveryType: deliveryType || 'file',
     };
     if (dueDate) data.dueDate = new Date(dueDate).toISOString();
     
@@ -259,11 +261,13 @@ export async function updateAssignment(assignmentId: string, formData: FormData)
   const title = formData.get('title') as string;
   const description = formData.get('description') as string;
   const dueDate = formData.get('dueDate') as string;
+  const deliveryType = formData.get('deliveryType') as string;
 
   try {
     const data: any = {
       title,
       description,
+      deliveryType: deliveryType || 'file',
     };
     if (dueDate) data.dueDate = new Date(dueDate).toISOString();
 

@@ -44,6 +44,7 @@ export interface Assignment extends BaseModel {
   title: string;
   description: string;
   dueDate?: string; // Adding dueDate as it might be useful without sprints
+  deliveryType?: 'file' | 'github'; // 'file' is for folder/zip upload, 'github' for repository url
   // Expanding relations
   expand?: {
     links?: Link[];
