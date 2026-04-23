@@ -26,9 +26,17 @@ export default function Header() {
           // Update cookie
           document.cookie = pb.authStore.exportToCookie({ httpOnly: false });
           setUser(updatedUser as unknown as User);
-        } catch (e) {
-          console.error("Failed to refresh user data", e);
-          setUser(pb.authStore.model as unknown as User);
+        } catch (e: any) {
+          // Si el usuario no existe (404) o el token es inválido (401), limpiamos la sesión
+          if (e.status === 404 || e.status === 401) {
+            pb.authStore.clear();
+            document.cookie = "pb_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            setUser(null);
+            router.push("/login");
+          } else {
+            console.error("Failed to refresh user data", e);
+            setUser(pb.authStore.model as unknown as User);
+          }
         }
       } else {
          setUser(pb.authStore.model as unknown as User);
