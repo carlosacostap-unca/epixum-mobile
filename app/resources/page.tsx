@@ -11,7 +11,7 @@ export default async function ResourcesPage() {
   
   const slidesResponse = await getAvailableSlides();
   const notesResponse = await getAvailableNotes();
-  const guidesResponse = await getAvailableStudyGuides();
+  const guidesResponse = await getAvailableStudyGuides({ includeUnavailable: !!isTeacher });
   
   const slides = slidesResponse.success ? slidesResponse.slides : [];
   const notes = notesResponse.success ? notesResponse.notes : [];

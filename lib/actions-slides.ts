@@ -2,6 +2,8 @@
 
 import fs from 'fs';
 import path from 'path';
+import { revalidatePath } from 'next/cache';
+import { createServerClient } from './pocketbase-server';
 
 export interface SlideOption {
   filename: string;
@@ -19,6 +21,43 @@ export interface StudyGuideOption {
   filename: string;
   path: string;
   title: string;
+  available: boolean;
+}
+
+interface StudyGuideMetadata {
+  title?: string;
+  available?: boolean;
+}
+
+type StudyGuideMetadataMap = Record<string, StudyGuideMetadata>;
+
+const getGuidesDir = () => path.join(process.cwd(), 'public', 'slides', 'study-guides');
+const getGuidesMetadataPath = () => path.join(getGuidesDir(), 'metadata.json');
+
+async function readStudyGuideMetadata(): Promise<StudyGuideMetadataMap> {
+  const metadataPath = getGuidesMetadataPath();
+
+  try {
+    if (!fs.existsSync(metadataPath)) {
+      return {};
+    }
+
+    const content = await fs.promises.readFile(metadataPath, 'utf-8');
+    return JSON.parse(content) as StudyGuideMetadataMap;
+  } catch (error) {
+    console.error("Error reading study guide metadata:", error);
+    return {};
+  }
+}
+
+async function writeStudyGuideMetadata(metadata: StudyGuideMetadataMap) {
+  const guidesDir = getGuidesDir();
+
+  if (!fs.existsSync(guidesDir)) {
+    await fs.promises.mkdir(guidesDir, { recursive: true });
+  }
+
+  await fs.promises.writeFile(getGuidesMetadataPath(), JSON.stringify(metadata, null, 2));
 }
 
 export async function getAvailableSlides() {
@@ -124,8 +163,8 @@ export async function getAvailableNotes() {
   }
 }
 
-export async function getAvailableStudyGuides() {
-  const guidesDir = path.join(process.cwd(), 'public', 'slides', 'study-guides');
+export async function getAvailableStudyGuides(options?: { includeUnavailable?: boolean }) {
+  const guidesDir = getGuidesDir();
   
   try {
     if (!fs.existsSync(guidesDir)) {
@@ -133,34 +172,93 @@ export async function getAvailableStudyGuides() {
     }
 
     const files = await fs.promises.readdir(guidesDir);
+    const metadata = await readStudyGuideMetadata();
     const guides: StudyGuideOption[] = [];
 
     for (const file of files) {
       if (file.endsWith('.pdf') || file.endsWith('.docx') || file.endsWith('.md') || file.endsWith('.txt')) {
-        let title = '';
+        const guideMetadata = metadata[file];
+        const available = guideMetadata?.available ?? true;
+
+        if (!available && !options?.includeUnavailable) {
+          continue;
+        }
+
+        let title = guideMetadata?.title?.trim() || '';
         const ext = path.extname(file);
 
         // Fallback to filename
-        title = file
-          .replace(ext, '')
-          .replace(/-/g, ' ')
-          .replace(/^\w/, (c) => c.toUpperCase());
+        if (!title) {
+          title = file
+            .replace(ext, '')
+            .replace(/-/g, ' ')
+            .replace(/^\w/, (c) => c.toUpperCase());
 
-        // Add extension to title
-        title = `${title} (${ext.replace('.', '')})`;
+          // Add extension to title
+          title = `${title} (${ext.replace('.', '')})`;
+        }
 
         guides.push({
           filename: file,
           path: `/slides/study-guides/${file}`,
-          title: title
+          title,
+          available,
         });
       }
     }
+
+    guides.sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }));
       
     return { success: true, guides };
   } catch (error) {
     console.error("Error reading study guides directory:", error);
     return { success: false, error: "Error al listar los apuntes", guides: [] };
+  }
+}
+
+export async function updateStudyGuideMetadata(formData: FormData) {
+  const pb = await createServerClient();
+  const user = pb.authStore.model;
+
+  if (!user || (user.role !== 'docente' && user.role !== 'admin')) {
+    return { success: false, error: "No autorizado" };
+  }
+
+  const filename = (formData.get('filename') as string)?.trim();
+  const title = (formData.get('title') as string)?.trim();
+  const available = formData.get('available') === 'on';
+
+  if (!filename) {
+    return { success: false, error: "No se indico el apunte" };
+  }
+
+  const guidesDir = getGuidesDir();
+  const filePath = path.join(guidesDir, filename);
+  const resolvedGuidesDir = path.resolve(guidesDir);
+  const resolvedFilePath = path.resolve(filePath);
+
+  if (
+    (resolvedFilePath !== resolvedGuidesDir && !resolvedFilePath.startsWith(resolvedGuidesDir + path.sep)) ||
+    !fs.existsSync(resolvedFilePath)
+  ) {
+    return { success: false, error: "El apunte no existe" };
+  }
+
+  try {
+    const metadata = await readStudyGuideMetadata();
+    metadata[filename] = {
+      title,
+      available,
+    };
+
+    await writeStudyGuideMetadata(metadata);
+    revalidatePath('/notes');
+    revalidatePath('/resources');
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating study guide metadata:", error);
+    return { success: false, error: "Error al guardar el apunte" };
   }
 }
 
@@ -242,7 +340,7 @@ export async function uploadStudyGuide(formData: FormData) {
     return { success: false, error: "El archivo debe ser .pdf, .docx, .md o .txt" };
   }
 
-  const guidesDir = path.join(process.cwd(), 'public', 'slides', 'study-guides');
+  const guidesDir = getGuidesDir();
   try {
     if (!fs.existsSync(guidesDir)) {
       await fs.promises.mkdir(guidesDir, { recursive: true });
