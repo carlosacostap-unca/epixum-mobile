@@ -11,6 +11,7 @@ export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const isParcialesSection = pathname.startsWith("/parciales");
 
   useEffect(() => {
     // Ensure we have the latest auth state from cookie
@@ -89,7 +90,15 @@ export default function Header() {
               Administrar Usuarios
             </Link>
           )}
-          {user && (user.role === 'estudiante' || user.role === 'docente' || user.role === 'admin') && (
+          {user && (user.role === 'docente' || user.role === 'admin') && isParcialesSection && (
+            <Link
+              href="/parciales"
+              className="text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+            >
+              Parciales
+            </Link>
+          )}
+          {user && (user.role === 'estudiante' || user.role === 'docente' || user.role === 'admin') && !isParcialesSection && (
             <Link
               href="/notes"
               className="text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
