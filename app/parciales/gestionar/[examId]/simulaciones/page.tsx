@@ -103,14 +103,14 @@ export default async function ExamSimulationsPage({
           Volver a Gestionar parciales
         </Link>
         <h1 className="mt-5 text-4xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-100">
-          Seguimiento de simulacro
+          Parciales realizados
         </h1>
         <p className="mt-2 text-lg text-zinc-600 dark:text-zinc-300">{exam.title}</p>
       </div>
 
       <section className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-sm text-zinc-600 dark:text-zinc-300">Realizaron</p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-300">Parciales enviados</p>
           <p className="mt-3 text-4xl font-extrabold text-zinc-900 dark:text-zinc-100">
             {summary.completedStudents.length}
           </p>

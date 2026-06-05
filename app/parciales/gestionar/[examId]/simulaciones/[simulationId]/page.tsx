@@ -36,8 +36,8 @@ export default async function SimulationDetailPage({
       </nav>
 
       <div className="mb-8">
-        <Link href={`/parciales/gestionar/${examId}/simulaciones`} className="text-sm text-blue-500 hover:text-blue-400">
-          Volver a simulaciones
+        <Link href={`/parciales/${examId}/resultados`} className="text-sm text-blue-500 hover:text-blue-400">
+          Volver a resultados
         </Link>
         <h1 className="mt-5 text-4xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-100">
           {exam.title}

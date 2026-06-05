@@ -3,7 +3,8 @@ import { createServerClient } from "@/lib/pocketbase-server";
 import { getQuestionBankUnitDetail, QuestionBankQuestion, QuestionBankUnit } from "@/lib/question-bank";
 import type { User } from "@/types";
 
-export type PartialExamStatus = "Borrador" | "Publicado" | "Cerrado";
+export type PartialExamStatus = "Planificado" | "Publicado" | "Finalizado";
+type LegacyPartialExamStatus = PartialExamStatus | "Borrador" | "Cerrado";
 
 export type PartialExam = {
   id: string;
@@ -15,9 +16,18 @@ export type PartialExam = {
   durationMinutes?: number;
   questionCount: number;
   banks: string[];
+  turns: PartialExamTurn[];
   expand?: {
     banks?: Array<{ id: string; name?: string; title?: string }>;
   };
+};
+
+export type PartialExamTurn = {
+  id: string;
+  exam: string;
+  name: string;
+  startsAt: string;
+  endsAt: string;
 };
 
 export type PartialExamSimulation = {
@@ -79,6 +89,15 @@ type PocketBaseRecord = {
   [key: string]: unknown;
 };
 
+type ServerPocketBase = Awaited<ReturnType<typeof createServerClient>>;
+
+export type PartialExamTurnPayload = {
+  id?: string;
+  name: string;
+  startsAt: string;
+  endsAt: string;
+};
+
 function asString(value: unknown, fallback = "") {
   return typeof value === "string" ? value : fallback;
 }
@@ -91,6 +110,14 @@ function asStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function normalizeStatus(value: unknown): PartialExamStatus {
+  const status = asString(value, "Planificado") as LegacyPartialExamStatus;
+  if (status === "Borrador") return "Planificado";
+  if (status === "Cerrado") return "Finalizado";
+  if (status === "Publicado" || status === "Finalizado") return status;
+  return "Planificado";
+}
+
 function normalizeExam(record: PocketBaseRecord): PartialExam {
   return {
     id: record.id,
@@ -98,11 +125,22 @@ function normalizeExam(record: PocketBaseRecord): PartialExam {
     description: asString(record.description) || undefined,
     startAt: asString(record.startAt) || asString(record.scheduledAt) || undefined,
     endAt: asString(record.endAt) || undefined,
-    status: asString(record.status, "Borrador") as PartialExamStatus,
+    status: normalizeStatus(record.status),
     durationMinutes: asNumber(record.durationMinutes) || undefined,
     questionCount: asNumber(record.questionCount, 10) || 10,
     banks: asStringArray(record.banks),
+    turns: [],
     expand: record.expand as PartialExam["expand"],
+  };
+}
+
+function normalizeTurn(record: PocketBaseRecord): PartialExamTurn {
+  return {
+    id: record.id,
+    exam: asString(record.exam) || asString(record.partialExam),
+    name: asString(record.name, "Turno"),
+    startsAt: asString(record.startsAt) || asString(record.startAt),
+    endsAt: asString(record.endsAt) || asString(record.endAt),
   };
 }
 
@@ -199,14 +237,129 @@ async function getSelectedQuestionsForBanks(bankIds: string[]) {
     .filter((question) => question.selected);
 }
 
+async function getPartialExamTurns(pb: ServerPocketBase, examIds: string[]) {
+  if (examIds.length === 0) {
+    return new Map<string, PartialExamTurn[]>();
+  }
+
+  async function readTurns(relationField: "partialExam" | "exam") {
+    const filter = examIds.map((examId) => `${relationField} = "${examId}"`).join(" || ");
+    const records = await pb.collection("partial_exam_turns").getFullList<PocketBaseRecord>({
+      filter,
+      sort: "startsAt",
+    });
+    const turnsByExam = new Map<string, PartialExamTurn[]>();
+
+    for (const record of records) {
+      const turn = normalizeTurn(record);
+      const turns = turnsByExam.get(turn.exam) ?? [];
+      turns.push(turn);
+      turnsByExam.set(turn.exam, turns);
+    }
+
+    return turnsByExam;
+  }
+
+  try {
+    return await readTurns("partialExam");
+  } catch {
+    try {
+      return await readTurns("exam");
+    } catch {
+      return new Map<string, PartialExamTurn[]>();
+    }
+  }
+}
+
+function getLegacyTurn(exam: PartialExam): PartialExamTurn | null {
+  if (!exam.startAt && !exam.endAt) {
+    return null;
+  }
+
+  return {
+    id: "legacy",
+    exam: exam.id,
+    name: "Turno principal",
+    startsAt: exam.startAt ?? "",
+    endsAt: exam.endAt ?? "",
+  };
+}
+
+async function attachPartialExamTurns<T extends PartialExam>(pb: ServerPocketBase, exams: T[]) {
+  const turnsByExam = await getPartialExamTurns(pb, exams.map((exam) => exam.id));
+
+  return exams.map((exam) => {
+    const storedTurns = turnsByExam.get(exam.id) ?? [];
+    const legacyTurn = storedTurns.length === 0 ? getLegacyTurn(exam) : null;
+    return {
+      ...exam,
+      turns: storedTurns.length > 0 ? storedTurns : legacyTurn ? [legacyTurn] : [],
+    };
+  });
+}
+
+async function syncPartialExamTurns(pb: ServerPocketBase, examId: string, turns: PartialExamTurnPayload[] = []) {
+  if (turns.length === 0) {
+    return;
+  }
+
+  async function syncWithField(relationField: "partialExam" | "exam") {
+    const existing = await pb.collection("partial_exam_turns").getFullList<PocketBaseRecord>({
+      filter: `${relationField} = "${examId}"`,
+    });
+    const incomingIds = new Set(turns.map((turn) => turn.id).filter(Boolean));
+
+    for (const turn of turns) {
+      const data = {
+        [relationField]: examId,
+        name: turn.name,
+        startsAt: turn.startsAt,
+        endsAt: turn.endsAt,
+      };
+
+      if (turn.id) {
+        await pb.collection("partial_exam_turns").update(turn.id, data);
+      } else {
+        await pb.collection("partial_exam_turns").create(data);
+      }
+    }
+
+    for (const turn of existing) {
+      if (!incomingIds.has(turn.id)) {
+        await pb.collection("partial_exam_turns").delete(turn.id);
+      }
+    }
+  }
+
+  try {
+    await syncWithField("partialExam");
+  } catch {
+    try {
+      await syncWithField("exam");
+    } catch {
+      return;
+    }
+  }
+}
+
+function getCurrentOrNextTurn(exam: PartialExam, now = new Date()) {
+  const nowMs = now.getTime();
+  const sortedTurns = [...exam.turns].sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+  return sortedTurns.find((turn) => {
+    const startsAtMs = new Date(turn.startsAt).getTime();
+    const endsAtMs = new Date(turn.endsAt).getTime();
+    return startsAtMs <= nowMs && endsAtMs > nowMs;
+  }) ?? sortedTurns.find((turn) => new Date(turn.startsAt).getTime() > nowMs) ?? sortedTurns.at(-1) ?? null;
+}
+
 export async function getPartialExams() {
   const pb = await createServerClient();
   const records = await pb.collection("partial_exams").getFullList<PocketBaseRecord>({
-    sort: "-created",
+    sort: "-startAt,-created",
     expand: "banks",
   });
 
-  return records.map(normalizeExam);
+  return attachPartialExamTurns(pb, records.map(normalizeExam));
 }
 
 export async function getPartialExam(examId: string) {
@@ -215,7 +368,8 @@ export async function getPartialExam(examId: string) {
     expand: "banks",
   });
 
-  return normalizeExam(record);
+  const [exam] = await attachPartialExamTurns(pb, [normalizeExam(record)]);
+  return exam;
 }
 
 export async function createPartialExam(data: {
@@ -226,12 +380,16 @@ export async function createPartialExam(data: {
   status: PartialExamStatus;
   durationMinutes?: number;
   banks: string[];
+  turns?: PartialExamTurnPayload[];
 }) {
   const pb = await createServerClient();
-  return pb.collection("partial_exams").create({
+  const exam = await pb.collection("partial_exams").create<PocketBaseRecord>({
     ...data,
+    turns: undefined,
     questionCount: 10,
   });
+  await syncPartialExamTurns(pb, exam.id, data.turns);
+  return exam;
 }
 
 export async function updatePartialExam(examId: string, data: {
@@ -242,12 +400,16 @@ export async function updatePartialExam(examId: string, data: {
   status: PartialExamStatus;
   durationMinutes?: number;
   banks: string[];
+  turns?: PartialExamTurnPayload[];
 }) {
   const pb = await createServerClient();
-  return pb.collection("partial_exams").update(examId, {
+  const exam = await pb.collection("partial_exams").update(examId, {
     ...data,
+    turns: undefined,
     questionCount: 10,
   });
+  await syncPartialExamTurns(pb, examId, data.turns);
+  return exam;
 }
 
 export async function deletePartialExam(examId: string) {
@@ -300,20 +462,21 @@ export async function createSimulationPayloadForExam(examId: string) {
 }
 
 export function getExamAvailability(exam: PartialExam, now = new Date()) {
-  const startAt = exam.startAt ? new Date(exam.startAt) : null;
-  const endAt = exam.endAt ? new Date(exam.endAt) : null;
+  const turn = getCurrentOrNextTurn(exam, now);
+  const startAt = turn?.startsAt ? new Date(turn.startsAt) : exam.startAt ? new Date(exam.startAt) : null;
+  const endAt = turn?.endsAt ? new Date(turn.endsAt) : exam.endAt ? new Date(exam.endAt) : null;
 
   if (startAt && now < startAt) {
-    return { available: false, reason: "El parcial aun no esta disponible." };
+    return { available: false, reason: "El parcial aun no esta disponible.", startAt: startAt.toISOString(), endAt: endAt?.toISOString() };
   }
   if (endAt && now > endAt) {
-    return { available: false, reason: "El parcial ya finalizo." };
+    return { available: false, reason: "El parcial ya finalizo.", startAt: startAt?.toISOString(), endAt: endAt.toISOString() };
   }
   if (exam.status !== "Publicado") {
-    return { available: false, reason: "El parcial no esta publicado." };
+    return { available: false, reason: "El parcial no esta publicado.", startAt: startAt?.toISOString(), endAt: endAt?.toISOString() };
   }
 
-  return { available: true, reason: null };
+  return { available: true, reason: null, startAt: startAt?.toISOString(), endAt: endAt?.toISOString() };
 }
 
 export async function getOrCreatePartialExamAttempt(examId: string) {

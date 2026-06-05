@@ -200,7 +200,7 @@ export default function ExamRunner({
       <div className="mx-auto max-w-3xl rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Antes de iniciar</h2>
         <p className="mx-auto mt-5 max-w-2xl text-zinc-600 dark:text-zinc-300">
-          Para simular el parcial, primero activa la camara. La vista previa se mantendra visible durante la simulacion.
+          Para realizar el parcial, primero activa la camara. La vista previa se mantendra visible durante el intento.
         </p>
         <div className="mt-6 rounded-md bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
           Tiempo restante: {formatTime(remainingMs)}
@@ -221,7 +221,7 @@ export default function ExamRunner({
   if (!currentQuestion) {
     return (
       <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
-        <p className="text-zinc-600 dark:text-zinc-300">No hay preguntas para esta simulacion.</p>
+        <p className="text-zinc-600 dark:text-zinc-300">No hay preguntas para este parcial.</p>
       </div>
     );
   }
@@ -298,7 +298,7 @@ export default function ExamRunner({
           <video ref={videoRef} autoPlay muted playsInline className="aspect-video w-full bg-black object-cover" />
           <div className="p-4">
             <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Camara activa</p>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">La vista previa permanece visible durante la simulacion.</p>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">La vista previa permanece visible durante el intento.</p>
           </div>
         </div>
         <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">

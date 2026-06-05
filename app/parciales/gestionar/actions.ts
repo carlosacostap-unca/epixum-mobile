@@ -19,9 +19,19 @@ function readExamForm(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim();
   const startAt = String(formData.get("startAt") ?? "").trim();
   const endAt = String(formData.get("endAt") ?? "").trim();
-  const status = String(formData.get("status") ?? "Borrador") as PartialExamStatus;
+  const status = String(formData.get("status") ?? "Planificado") as PartialExamStatus;
   const durationMinutes = Number(formData.get("durationMinutes") ?? 0);
   const banks = formData.getAll("banks").map(String).filter(Boolean);
+  const turnIds = formData.getAll("turnIds").map(String);
+  const turnNames = formData.getAll("turnNames").map(String);
+  const turnStartsAt = formData.getAll("turnStartsAt").map(String);
+  const turnEndsAt = formData.getAll("turnEndsAt").map(String);
+  const turns = turnNames.map((name, index) => ({
+    id: turnIds[index] || undefined,
+    name: name.trim() || `Turno ${index + 1}`,
+    startsAt: turnStartsAt[index] ? new Date(turnStartsAt[index]).toISOString() : "",
+    endsAt: turnEndsAt[index] ? new Date(turnEndsAt[index]).toISOString() : "",
+  })).filter((turn) => turn.startsAt && turn.endsAt);
 
   if (!title) {
     throw new Error("Ingresa un titulo para el parcial.");
@@ -31,14 +41,19 @@ function readExamForm(formData: FormData) {
     throw new Error("Selecciona al menos un banco de preguntas.");
   }
 
+  if (!turns.length && (!startAt || !endAt)) {
+    throw new Error("Configura al menos un turno con inicio y fin.");
+  }
+
   return {
     title,
     description,
-    startAt: startAt ? new Date(startAt).toISOString() : undefined,
-    endAt: endAt ? new Date(endAt).toISOString() : undefined,
+    startAt: turns[0]?.startsAt ?? (startAt ? new Date(startAt).toISOString() : undefined),
+    endAt: turns.at(-1)?.endsAt ?? (endAt ? new Date(endAt).toISOString() : undefined),
     status,
     durationMinutes: Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : undefined,
     banks,
+    turns,
   };
 }
 

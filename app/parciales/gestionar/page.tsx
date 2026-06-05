@@ -27,8 +27,20 @@ function formatDate(value?: string) {
 
 function statusClass(status: string) {
   if (status === "Publicado") return "bg-violet-950/70 text-violet-200";
-  if (status === "Cerrado") return "bg-zinc-800 text-zinc-200";
+  if (status === "Finalizado") return "bg-zinc-800 text-zinc-200";
   return "bg-blue-950/70 text-blue-200";
+}
+
+function getExamWindow(exam: { startAt?: string; endAt?: string; turns?: Array<{ startsAt: string; endsAt: string }> }) {
+  if (!exam.turns?.length) {
+    return { startAt: exam.startAt, endAt: exam.endAt };
+  }
+
+  const turns = [...exam.turns].sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+  return {
+    startAt: turns[0]?.startsAt ?? exam.startAt,
+    endAt: turns.at(-1)?.endsAt ?? exam.endAt,
+  };
 }
 
 export default async function ManagePartialExamsPage() {
@@ -84,6 +96,7 @@ export default async function ManagePartialExamsPage() {
         {exams.length > 0 ? exams.map((exam) => {
           const availableQuestions = exam.banks.reduce((total, bankId) => total + (selectedQuestionsByBank.get(bankId) ?? 0), 0);
           const canSimulate = availableQuestions >= 10;
+          const examWindow = getExamWindow(exam);
 
           return (
             <article
@@ -97,10 +110,13 @@ export default async function ManagePartialExamsPage() {
                     {exam.status}
                   </span>
                   <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
-                    Inicio: {formatDate(exam.startAt)}
+                    Inicio: {formatDate(examWindow.startAt)}
                   </span>
                   <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
-                    Fin: {formatDate(exam.endAt)}
+                    Fin: {formatDate(examWindow.endAt)}
+                  </span>
+                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
+                    {exam.turns.length} {exam.turns.length === 1 ? "turno" : "turnos"}
                   </span>
                   <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
                     10 preguntas
@@ -117,7 +133,7 @@ export default async function ManagePartialExamsPage() {
 
               <div className="flex flex-wrap items-center gap-2">
                 <Link
-                  href={canSimulate ? `/parciales/gestionar/${exam.id}/simular` : "#"}
+                  href={canSimulate ? `/parciales/${exam.id}/realizar` : "#"}
                   title={canSimulate ? undefined : "Necesita al menos 10 preguntas habilitadas"}
                   aria-disabled={!canSimulate}
                   className={`rounded-md px-4 py-2 text-sm text-white transition-colors ${
@@ -126,13 +142,13 @@ export default async function ManagePartialExamsPage() {
                       : "pointer-events-none bg-blue-600 opacity-50"
                   }`}
                 >
-                  Simular
+                  Realizar
                 </Link>
                 <Link
-                  href={`/parciales/gestionar/${exam.id}/simulaciones`}
+                  href={`/parciales/${exam.id}/resultados`}
                   className="rounded-md border border-emerald-700 px-4 py-2 text-sm text-emerald-400 hover:bg-emerald-950/40 transition-colors"
                 >
-                  Simulaciones
+                  Resultados
                 </Link>
                 <EditExamButton
                   exam={exam}

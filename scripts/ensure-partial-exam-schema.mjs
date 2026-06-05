@@ -136,7 +136,7 @@ async function main() {
 
   const statusField = examFields.find((field) => field.name === "status");
   if (statusField?.type === "select") {
-    statusField.values = ["Borrador", "Publicado", "Cerrado"];
+    statusField.values = ["Planificado", "Publicado", "Finalizado"];
   }
 
   exams = await patchCollection(exams, { fields: examFields });

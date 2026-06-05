@@ -7,6 +7,13 @@ import { PartialExam } from "@/lib/partial-exams";
 import { QuestionBankUnit } from "@/lib/question-bank";
 
 type ExamAction = (state: ExamFormState, formData: FormData) => Promise<ExamFormState>;
+type TurnFormRow = {
+  key: string;
+  id: string;
+  name: string;
+  startsAt: string;
+  endsAt: string;
+};
 
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -28,6 +35,26 @@ function formatDateInput(value?: string) {
   return date.toISOString().slice(0, 16);
 }
 
+function getInitialTurns(exam?: PartialExam): TurnFormRow[] {
+  if (exam?.turns?.length) {
+    return exam.turns.map((turn) => ({
+      key: turn.id,
+      id: turn.id === "legacy" ? "" : turn.id,
+      name: turn.name,
+      startsAt: formatDateInput(turn.startsAt),
+      endsAt: formatDateInput(turn.endsAt),
+    }));
+  }
+
+  return [{
+    key: "new-turn-0",
+    id: "",
+    name: "Turno 1",
+    startsAt: formatDateInput(exam?.startAt),
+    endsAt: formatDateInput(exam?.endAt),
+  }];
+}
+
 function ExamModal({
   title,
   exam,
@@ -43,12 +70,36 @@ function ExamModal({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [state, formAction] = useActionState(action, { success: false, error: null });
+  const [turns, setTurns] = useState<TurnFormRow[]>(() => getInitialTurns(exam));
 
   useEffect(() => {
     if (state.success) setIsOpen(false);
   }, [state.success]);
 
   const selectedBanks = new Set(exam?.banks ?? []);
+
+  function updateTurn(index: number, field: "name" | "startsAt" | "endsAt", value: string) {
+    setTurns((currentTurns) => currentTurns.map((turn, turnIndex) => (
+      turnIndex === index ? { ...turn, [field]: value } : turn
+    )));
+  }
+
+  function addTurn() {
+    setTurns((currentTurns) => [
+      ...currentTurns,
+      {
+        key: `new-turn-${Date.now()}`,
+        id: "",
+        name: `Turno ${currentTurns.length + 1}`,
+        startsAt: "",
+        endsAt: "",
+      },
+    ]);
+  }
+
+  function removeTurn(index: number) {
+    setTurns((currentTurns) => currentTurns.filter((_, turnIndex) => turnIndex !== index));
+  }
 
   return (
     <>
@@ -88,37 +139,73 @@ function ExamModal({
                 placeholder="Descripcion breve"
                 className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
               />
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <label className="space-y-1 text-sm text-zinc-300">
-                  <span>Inicio</span>
-                  <input
-                    name="startAt"
-                    type="datetime-local"
-                    defaultValue={formatDateInput(exam?.startAt)}
-                    className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
-                  />
-                </label>
-                <label className="space-y-1 text-sm text-zinc-300">
-                  <span>Fin</span>
-                  <input
-                    name="endAt"
-                    type="datetime-local"
-                    defaultValue={formatDateInput(exam?.endAt)}
-                    className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
-                  />
-                </label>
-              </div>
+              <section className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-medium text-zinc-200">Turnos</h3>
+                  <button
+                    type="button"
+                    onClick={addTurn}
+                    className="rounded-md border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-200 hover:bg-blue-950/50"
+                  >
+                    Agregar turno
+                  </button>
+                </div>
+                {turns.map((turn, index) => (
+                  <div key={turn.key} className="rounded-md border border-zinc-700 p-3">
+                    <input type="hidden" name="turnIds" value={turn.id} />
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
+                      <label className="space-y-1 text-sm text-zinc-300">
+                        <span>Nombre</span>
+                        <input
+                          name="turnNames"
+                          value={turn.name}
+                          onChange={(event) => updateTurn(index, "name", event.target.value)}
+                          className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+                        />
+                      </label>
+                      <label className="space-y-1 text-sm text-zinc-300">
+                        <span>Inicio</span>
+                        <input
+                          name="turnStartsAt"
+                          type="datetime-local"
+                          value={turn.startsAt}
+                          onChange={(event) => updateTurn(index, "startsAt", event.target.value)}
+                          className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+                        />
+                      </label>
+                      <label className="space-y-1 text-sm text-zinc-300">
+                        <span>Fin</span>
+                        <input
+                          name="turnEndsAt"
+                          type="datetime-local"
+                          value={turn.endsAt}
+                          onChange={(event) => updateTurn(index, "endsAt", event.target.value)}
+                          className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => removeTurn(index)}
+                        disabled={turns.length === 1}
+                        className="rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </section>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <label className="space-y-1 text-sm text-zinc-300">
                   <span>Estado</span>
                   <select
                     name="status"
-                    defaultValue={exam?.status ?? "Borrador"}
+                    defaultValue={exam?.status ?? "Planificado"}
                     className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
                   >
-                    <option>Borrador</option>
+                    <option>Planificado</option>
                     <option>Publicado</option>
-                    <option>Cerrado</option>
+                    <option>Finalizado</option>
                   </select>
                 </label>
                 <label className="space-y-1 text-sm text-zinc-300">
@@ -187,7 +274,7 @@ export function NewExamButton({ banks, action }: { banks: QuestionBankUnit[]; ac
           className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-white hover:bg-blue-700 transition-colors"
         >
           <span className="text-2xl leading-none">+</span>
-          Nuevo Parcial
+          Nuevo parcial
         </button>
       )}
     />

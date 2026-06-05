@@ -15,6 +15,18 @@ function formatDate(value?: string) {
   }).format(date);
 }
 
+function getExamWindow(exam: { startAt?: string; endAt?: string; turns?: Array<{ startsAt: string; endsAt: string }> }) {
+  if (!exam.turns?.length) {
+    return { startAt: exam.startAt, endAt: exam.endAt };
+  }
+
+  const turns = [...exam.turns].sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+  return {
+    startAt: turns[0]?.startsAt ?? exam.startAt,
+    endAt: turns.at(-1)?.endsAt ?? exam.endAt,
+  };
+}
+
 export default async function ParcialesPage() {
   const user = await getCurrentUser();
   const isTeacher = user && (user.role === 'docente' || user.role === 'admin');
@@ -48,6 +60,7 @@ export default async function ParcialesPage() {
         <div className="space-y-4">
           {exams.length > 0 ? exams.map((exam) => {
             const availability = getExamAvailability(exam);
+            const examWindow = getExamWindow(exam);
             return (
               <article
                 key={exam.id}
@@ -60,10 +73,10 @@ export default async function ParcialesPage() {
                         Publicado
                       </span>
                       <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
-                        Inicio: {formatDate(exam.startAt)}
+                        Inicio: {formatDate(examWindow.startAt)}
                       </span>
                       <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
-                        Fin: {formatDate(exam.endAt)}
+                        Fin: {formatDate(examWindow.endAt)}
                       </span>
                     </div>
                     <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{exam.title}</h2>
@@ -76,7 +89,7 @@ export default async function ParcialesPage() {
                   </div>
 
                   <Link
-                    href={availability.available ? `/parciales/gestionar/${exam.id}/simular` : "#"}
+                    href={availability.available ? `/parciales/${exam.id}/realizar` : "#"}
                     aria-disabled={!availability.available}
                     className={`rounded-md px-4 py-2 text-center text-sm text-white transition-colors ${
                       availability.available
@@ -84,7 +97,7 @@ export default async function ParcialesPage() {
                         : "pointer-events-none bg-blue-600 opacity-50"
                     }`}
                   >
-                    Simular parcial
+                    Realizar parcial
                   </Link>
                 </div>
               </article>

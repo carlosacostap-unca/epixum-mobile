@@ -10,7 +10,7 @@ import {
 
 export async function startExamAttemptAction(examId: string) {
   const { result } = await getOrCreatePartialExamAttempt(examId);
-  redirect(`/parciales/gestionar/${examId}/simular?result=${result.id}`);
+  redirect(`/parciales/${examId}/realizar?result=${result.id}`);
 }
 
 export async function saveAnswerAction(resultId: string, questionId: string, answer: string, currentQuestionIndex: number) {
@@ -23,5 +23,5 @@ export async function saveProgressAction(resultId: string, currentQuestionIndex:
 
 export async function finishAttemptAction(examId: string, resultId: string) {
   await finishPartialExamAttempt(resultId);
-  redirect(`/parciales/gestionar/${examId}/simular?result=${resultId}&finished=1`);
+  redirect(`/parciales/${examId}/realizar?result=${resultId}&finished=1`);
 }
