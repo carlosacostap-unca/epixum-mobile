@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/pocketbase-server";
 import {
   getExamAvailability,
-  getActivePartialExamAttempt,
+  getCurrentUserPartialExamAttempt,
   getPartialExam,
   getPartialExamAttempt,
 } from "@/lib/partial-exams";
@@ -66,10 +66,10 @@ export default async function SimulateExamPage({
     );
   }
 
-  const activeAttempt = await getActivePartialExamAttempt(examId);
+  const existingAttempt = await getCurrentUserPartialExamAttempt(examId);
 
-  if (activeAttempt) {
-    redirect(`/parciales/${examId}/realizar?result=${activeAttempt.id}`);
+  if (existingAttempt) {
+    redirect(`/parciales/${examId}/realizar?result=${existingAttempt.id}`);
   }
 
   return (

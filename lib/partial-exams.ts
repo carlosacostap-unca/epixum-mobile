@@ -489,42 +489,44 @@ export async function getOrCreatePartialExamAttempt(examId: string) {
     throw new Error("No hay usuario autenticado.");
   }
 
-  try {
-    const existing = await pb.collection("partial_exam_results").getFirstListItem<PocketBaseRecord>(
-      `exam = "${examId}" && student = "${userId}" && status = "Iniciado"`,
-    );
-    return {
-      exam: await getPartialExam(examId),
-      result: normalizeResult(existing),
-      created: false,
-    };
-  } catch {
-    const { exam, payload } = await createSimulationPayloadForExam(examId);
-    const availability = getExamAvailability(exam);
-    if (!availability.available) {
-      throw new Error(availability.reason ?? "El parcial no esta disponible.");
+  const existing = await getPartialExamAttemptForUser(pb, examId, userId);
+  if (existing) {
+    if (existing.status !== "Iniciado") {
+      throw new Error("Ya realizaste este parcial. Solo se permite un intento por alumno.");
     }
 
-    const now = new Date().toISOString();
-    const created = await pb.collection("partial_exam_results").create<PocketBaseRecord>({
-      exam: examId,
-      student: userId,
-      answers: {},
-      score: 0,
-      total: 10,
-      status: "Iniciado",
-      startedAt: now,
-      cameraStartedAt: now,
-      currentQuestionIndex: 0,
-      payload,
-    });
-
     return {
-      exam,
-      result: normalizeResult(created),
-      created: true,
+      exam: await getPartialExam(examId),
+      result: existing,
+      created: false,
     };
   }
+
+  const { exam, payload } = await createSimulationPayloadForExam(examId);
+  const availability = getExamAvailability(exam);
+  if (!availability.available) {
+    throw new Error(availability.reason ?? "El parcial no esta disponible.");
+  }
+
+  const now = new Date().toISOString();
+  const created = await pb.collection("partial_exam_results").create<PocketBaseRecord>({
+    exam: examId,
+    student: userId,
+    answers: {},
+    score: 0,
+    total: 10,
+    status: "Iniciado",
+    startedAt: now,
+    cameraStartedAt: now,
+    currentQuestionIndex: 0,
+    payload,
+  });
+
+  return {
+    exam,
+    result: normalizeResult(created),
+    created: true,
+  };
 }
 
 export async function getActivePartialExamAttempt(examId: string) {
@@ -542,6 +544,50 @@ export async function getActivePartialExamAttempt(examId: string) {
   } catch {
     return null;
   }
+}
+
+async function getPartialExamAttemptForUser(pb: ServerPocketBase, examId: string, userId: string) {
+  const records = await pb.collection("partial_exam_results").getFullList<PocketBaseRecord>({
+    filter: `exam = "${examId}" && student = "${userId}"`,
+    sort: "-created",
+  });
+
+  return records[0] ? normalizeResult(records[0]) : null;
+}
+
+export async function getCurrentUserPartialExamAttempt(examId: string) {
+  const pb = await createServerClient();
+  const userId = pb.authStore.model?.id;
+  if (!userId) {
+    return null;
+  }
+
+  return getPartialExamAttemptForUser(pb, examId, userId);
+}
+
+export async function getCurrentUserPartialExamAttemptsByExam(examIds: string[]) {
+  const pb = await createServerClient();
+  const userId = pb.authStore.model?.id;
+  const attemptsByExam = new Map<string, PartialExamResult>();
+
+  if (!userId || examIds.length === 0) {
+    return attemptsByExam;
+  }
+
+  const records = await pb.collection("partial_exam_results").getFullList<PocketBaseRecord>({
+    filter: `student = "${userId}"`,
+    sort: "-created",
+  });
+
+  const examIdSet = new Set(examIds);
+  for (const record of records) {
+    const result = normalizeResult(record);
+    if (examIdSet.has(result.exam) && !attemptsByExam.has(result.exam)) {
+      attemptsByExam.set(result.exam, result);
+    }
+  }
+
+  return attemptsByExam;
 }
 
 export async function getPartialExamAttempt(examId: string, resultId: string) {

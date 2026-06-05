@@ -1,5 +1,5 @@
 import { getCurrentUser } from "@/lib/pocketbase-server";
-import { getExamAvailability, getPartialExams } from "@/lib/partial-exams";
+import { getCurrentUserPartialExamAttemptsByExam, getExamAvailability, getPartialExams } from "@/lib/partial-exams";
 import { formatArgentinaWallClockDate, parseArgentinaWallClockDate } from "@/lib/argentina-time";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -39,6 +39,7 @@ export default async function ParcialesPage() {
 
   if (isStudent) {
     const exams = (await getPartialExams()).filter((exam) => exam.status === "Publicado");
+    const attemptsByExam = await getCurrentUserPartialExamAttemptsByExam(exams.map((exam) => exam.id));
 
     return (
       <div className="container mx-auto p-8 min-h-screen">
@@ -58,6 +59,17 @@ export default async function ParcialesPage() {
           {exams.length > 0 ? exams.map((exam) => {
             const availability = getExamAvailability(exam);
             const examWindow = getExamWindow(exam);
+            const attempt = attemptsByExam.get(exam.id);
+            const attemptFinished = attempt?.status === "Entregado" || attempt?.status === "Corregido";
+            const canStartOrContinue = availability.available && !attemptFinished;
+            const actionHref = attempt
+              ? `/parciales/${exam.id}/realizar?result=${attempt.id}`
+              : `/parciales/${exam.id}/realizar`;
+            const actionLabel = attemptFinished
+              ? "Ver resultado"
+              : attempt?.status === "Iniciado"
+                ? "Continuar parcial"
+                : "Realizar parcial";
             return (
               <article
                 key={exam.id}
@@ -83,18 +95,23 @@ export default async function ParcialesPage() {
                     {!availability.available && availability.reason && (
                       <p className="mt-3 text-sm text-amber-600 dark:text-amber-300">{availability.reason}</p>
                     )}
+                    {attemptFinished && (
+                      <p className="mt-3 text-sm text-emerald-600 dark:text-emerald-300">
+                        Ya realizaste este parcial. Solo se permite un intento por alumno.
+                      </p>
+                    )}
                   </div>
 
                   <Link
-                    href={availability.available ? `/parciales/${exam.id}/realizar` : "#"}
-                    aria-disabled={!availability.available}
+                    href={canStartOrContinue || attemptFinished ? actionHref : "#"}
+                    aria-disabled={!canStartOrContinue && !attemptFinished}
                     className={`rounded-md px-4 py-2 text-center text-sm text-white transition-colors ${
-                      availability.available
+                      canStartOrContinue || attemptFinished
                         ? "bg-blue-600 hover:bg-blue-700"
                         : "pointer-events-none bg-blue-600 opacity-50"
                     }`}
                   >
-                    Realizar parcial
+                    {actionLabel}
                   </Link>
                 </div>
               </article>
