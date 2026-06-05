@@ -8,6 +8,7 @@ import {
   PartialExamStatus,
   updatePartialExam,
 } from "@/lib/partial-exams";
+import { dateTimeLocalToArgentinaWallClockIso } from "@/lib/argentina-time";
 
 export type ExamFormState = {
   success: boolean;
@@ -29,8 +30,8 @@ function readExamForm(formData: FormData) {
   const turns = turnNames.map((name, index) => ({
     id: turnIds[index] || undefined,
     name: name.trim() || `Turno ${index + 1}`,
-    startsAt: turnStartsAt[index] ? new Date(turnStartsAt[index]).toISOString() : "",
-    endsAt: turnEndsAt[index] ? new Date(turnEndsAt[index]).toISOString() : "",
+    startsAt: dateTimeLocalToArgentinaWallClockIso(turnStartsAt[index]),
+    endsAt: dateTimeLocalToArgentinaWallClockIso(turnEndsAt[index]),
   })).filter((turn) => turn.startsAt && turn.endsAt);
 
   if (!title) {
@@ -48,8 +49,8 @@ function readExamForm(formData: FormData) {
   return {
     title,
     description,
-    startAt: turns[0]?.startsAt ?? (startAt ? new Date(startAt).toISOString() : undefined),
-    endAt: turns.at(-1)?.endsAt ?? (endAt ? new Date(endAt).toISOString() : undefined),
+    startAt: (turns[0]?.startsAt ?? dateTimeLocalToArgentinaWallClockIso(startAt)) || undefined,
+    endAt: (turns.at(-1)?.endsAt ?? dateTimeLocalToArgentinaWallClockIso(endAt)) || undefined,
     status,
     durationMinutes: Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : undefined,
     banks,

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/pocketbase-server";
 import { getBanksForExamForms, getPartialExams } from "@/lib/partial-exams";
+import { formatArgentinaWallClockDate, parseArgentinaWallClockDate } from "@/lib/argentina-time";
 import {
   createExamAction,
   deleteExamAction,
@@ -16,13 +17,7 @@ import {
 export const dynamic = 'force-dynamic';
 
 function formatDate(value?: string) {
-  if (!value) return "Sin fecha";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Sin fecha";
-  return new Intl.DateTimeFormat("es-AR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
+  return formatArgentinaWallClockDate(value);
 }
 
 function statusClass(status: string) {
@@ -36,7 +31,9 @@ function getExamWindow(exam: { startAt?: string; endAt?: string; turns?: Array<{
     return { startAt: exam.startAt, endAt: exam.endAt };
   }
 
-  const turns = [...exam.turns].sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+  const turns = [...exam.turns].sort((left, right) => {
+    return (parseArgentinaWallClockDate(left.startsAt)?.getTime() ?? 0) - (parseArgentinaWallClockDate(right.startsAt)?.getTime() ?? 0);
+  });
   return {
     startAt: turns[0]?.startsAt ?? exam.startAt,
     endAt: turns.at(-1)?.endsAt ?? exam.endAt,

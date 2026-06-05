@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import { ExamFormState } from "./actions";
 import { PartialExam } from "@/lib/partial-exams";
 import { QuestionBankUnit } from "@/lib/question-bank";
+import { toArgentinaDateTimeLocalInput } from "@/lib/argentina-time";
 
 type ExamAction = (state: ExamFormState, formData: FormData) => Promise<ExamFormState>;
 type TurnFormRow = {
@@ -29,10 +30,7 @@ function SubmitButton({ label }: { label: string }) {
 }
 
 function formatDateInput(value?: string) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 16);
+  return toArgentinaDateTimeLocalInput(value);
 }
 
 function getInitialTurns(exam?: PartialExam): TurnFormRow[] {
@@ -73,7 +71,13 @@ function ExamModal({
   const [turns, setTurns] = useState<TurnFormRow[]>(() => getInitialTurns(exam));
 
   useEffect(() => {
-    if (state.success) setIsOpen(false);
+    if (!state.success) return;
+
+    const timer = window.setTimeout(() => {
+      setIsOpen(false);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [state.success]);
 
   const selectedBanks = new Set(exam?.banks ?? []);

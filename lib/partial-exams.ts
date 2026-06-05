@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createServerClient } from "@/lib/pocketbase-server";
 import { getQuestionBankUnitDetail, QuestionBankQuestion, QuestionBankUnit } from "@/lib/question-bank";
+import { parseArgentinaWallClockDate } from "@/lib/argentina-time";
 import type { User } from "@/types";
 
 export type PartialExamStatus = "Planificado" | "Publicado" | "Finalizado";
@@ -344,12 +345,14 @@ async function syncPartialExamTurns(pb: ServerPocketBase, examId: string, turns:
 
 function getCurrentOrNextTurn(exam: PartialExam, now = new Date()) {
   const nowMs = now.getTime();
-  const sortedTurns = [...exam.turns].sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+  const sortedTurns = [...exam.turns].sort((left, right) => {
+    return (parseArgentinaWallClockDate(left.startsAt)?.getTime() ?? 0) - (parseArgentinaWallClockDate(right.startsAt)?.getTime() ?? 0);
+  });
   return sortedTurns.find((turn) => {
-    const startsAtMs = new Date(turn.startsAt).getTime();
-    const endsAtMs = new Date(turn.endsAt).getTime();
+    const startsAtMs = parseArgentinaWallClockDate(turn.startsAt)?.getTime() ?? 0;
+    const endsAtMs = parseArgentinaWallClockDate(turn.endsAt)?.getTime() ?? 0;
     return startsAtMs <= nowMs && endsAtMs > nowMs;
-  }) ?? sortedTurns.find((turn) => new Date(turn.startsAt).getTime() > nowMs) ?? sortedTurns.at(-1) ?? null;
+  }) ?? sortedTurns.find((turn) => (parseArgentinaWallClockDate(turn.startsAt)?.getTime() ?? 0) > nowMs) ?? sortedTurns.at(-1) ?? null;
 }
 
 export async function getPartialExams() {
@@ -463,8 +466,8 @@ export async function createSimulationPayloadForExam(examId: string) {
 
 export function getExamAvailability(exam: PartialExam, now = new Date()) {
   const turn = getCurrentOrNextTurn(exam, now);
-  const startAt = turn?.startsAt ? new Date(turn.startsAt) : exam.startAt ? new Date(exam.startAt) : null;
-  const endAt = turn?.endsAt ? new Date(turn.endsAt) : exam.endAt ? new Date(exam.endAt) : null;
+  const startAt = turn?.startsAt ? parseArgentinaWallClockDate(turn.startsAt) : parseArgentinaWallClockDate(exam.startAt);
+  const endAt = turn?.endsAt ? parseArgentinaWallClockDate(turn.endsAt) : parseArgentinaWallClockDate(exam.endAt);
 
   if (startAt && now < startAt) {
     return { available: false, reason: "El parcial aun no esta disponible.", startAt: startAt.toISOString(), endAt: endAt?.toISOString() };
