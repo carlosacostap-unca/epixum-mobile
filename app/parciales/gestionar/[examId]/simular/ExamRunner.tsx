@@ -17,10 +17,14 @@ export default function ExamRunner({
   exam,
   result,
   autoStartCamera = false,
+  showAnswerReport = false,
+  answerReportAvailableAt,
 }: {
   exam: PartialExam;
   result: PartialExamResult;
   autoStartCamera?: boolean;
+  showAnswerReport?: boolean;
+  answerReportAvailableAt?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -120,8 +124,15 @@ export default function ExamRunner({
           <p className="mt-3 text-zinc-600 dark:text-zinc-300">
             Nota final: {result.score} / {result.total}
           </p>
+          {!showAnswerReport && (
+            <p className="mx-auto mt-4 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
+              El informe de respuestas estara disponible cuando finalice el parcial
+              {answerReportAvailableAt ? ` (${answerReportAvailableAt})` : ""}.
+            </p>
+          )}
         </div>
 
+        {showAnswerReport && (
         <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="mb-5">
             <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Informe de respuestas</h3>
@@ -191,6 +202,7 @@ export default function ExamRunner({
             })}
           </div>
         </section>
+        )}
       </div>
     );
   }

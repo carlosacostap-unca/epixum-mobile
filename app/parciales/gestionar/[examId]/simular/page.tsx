@@ -6,7 +6,10 @@ import {
   getCurrentUserPartialExamAttempt,
   getPartialExam,
   getPartialExamAttempt,
+  getPartialExamFinalEndAt,
+  isPartialExamReportAvailable,
 } from "@/lib/partial-exams";
+import { formatArgentinaWallClockDate } from "@/lib/argentina-time";
 import ExamRunner from "./ExamRunner";
 import StartSimulationForm from "./StartSimulationForm";
 
@@ -61,6 +64,8 @@ export default async function SimulateExamPage({
           exam={timedExam}
           result={attempt.result}
           autoStartCamera={Boolean(attempt.result.cameraStartedAt)}
+          showAnswerReport={isPartialExamReportAvailable(attempt.exam)}
+          answerReportAvailableAt={formatArgentinaWallClockDate(getPartialExamFinalEndAt(attempt.exam))}
         />
       </div>
     );

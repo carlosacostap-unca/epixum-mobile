@@ -355,6 +355,25 @@ function getCurrentOrNextTurn(exam: PartialExam, now = new Date()) {
   }) ?? sortedTurns.find((turn) => (parseArgentinaWallClockDate(turn.startsAt)?.getTime() ?? 0) > nowMs) ?? sortedTurns.at(-1) ?? null;
 }
 
+export function getPartialExamFinalEndAt(exam: PartialExam) {
+  const turnEndDates = exam.turns
+    .map((turn) => ({
+      value: turn.endsAt,
+      time: parseArgentinaWallClockDate(turn.endsAt)?.getTime() ?? 0,
+    }))
+    .filter((item) => item.value && item.time > 0)
+    .sort((left, right) => right.time - left.time);
+
+  return turnEndDates[0]?.value ?? exam.endAt;
+}
+
+export function isPartialExamReportAvailable(exam: PartialExam, now = new Date()) {
+  const finalEndAt = getPartialExamFinalEndAt(exam);
+  const finalEndDate = parseArgentinaWallClockDate(finalEndAt);
+
+  return Boolean(finalEndDate && now > finalEndDate);
+}
+
 export async function getPartialExams() {
   const pb = await createServerClient();
   const records = await pb.collection("partial_exams").getFullList<PocketBaseRecord>({
